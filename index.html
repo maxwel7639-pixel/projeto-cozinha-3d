@@ -6,14 +6,8 @@
 <title>Projeto Cozinha 3D</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { overflow: hidden; background: #1a1a1a; font-family: 'Segoe UI', sans-serif; }
+  body { overflow: hidden; background: #d4e8f0; font-family: 'Segoe UI', sans-serif; }
   canvas { display: block; }
-  #ui {
-    position: absolute; top: 20px; left: 20px;
-    color: white; pointer-events: none;
-  }
-  #ui h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.5px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
-  #ui p { font-size: 11px; opacity: 0.6; margin-top: 4px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
   #loading {
     position: absolute; inset: 0; display: flex;
     align-items: center; justify-content: center;
@@ -24,14 +18,15 @@
 </head>
 <body>
 <div id="loading">Carregando cozinha 3D…</div>
-<div id="ui">
-  <h1>Projeto Cozinha — Visualização 3D</h1>
-  <p>Arraste para girar · Scroll para zoom · Clique direito para mover</p>
+<div style="position:absolute;top:18px;left:18px;color:#fff;pointer-events:none;font-family:'Segoe UI',sans-serif">
+  <div style="font-size:15px;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,.7)">Projeto Cozinha — Visualização 3D</div>
+  <div style="font-size:11px;opacity:.55;margin-top:3px;text-shadow:0 1px 3px rgba(0,0,0,.7)">Arraste para girar · Scroll para zoom</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
+// ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -40,70 +35,76 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.physicallyCorrectLights = true;
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.1;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+scene.background = new THREE.Color(0xd4e8f0);
 
-const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.05, 50);
-camera.position.set(3.8, 2.2, 3.8);
-
+// ---------- Câmera nível dos olhos ----------
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.05, 30);
+camera.position.set(2.2, 1.55, 2.8);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0.9, 0);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.minDistance = 1.0;
-controls.maxDistance = 9;
-controls.maxPolarAngle = Math.PI * 0.55;
+controls.target.set(0, 1.1, -0.8);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 0.8; controls.maxDistance = 7;
+controls.maxPolarAngle = Math.PI * 0.52;
 controls.update();
 
-function makeMarbleTexture(w, h, baseColor, veinColor, veinCount) {
+// ---------- Textura de mármore (veios sinusoidais fluindo) ----------
+function marbleCanvas(w, h, base, veinR, veinG, veinB) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = baseColor; ctx.fillRect(0, 0, w, h);
-  for (let i = 0; i < veinCount; i++) {
+  ctx.fillStyle = base; ctx.fillRect(0, 0, w, h);
+
+  for (let i = 0; i < 10; i++) {
+    const startX = (Math.random() - 0.5) * w * 2;
+    const startY = Math.random() * h * 2 - h * 0.5;
+    const mainAngle = (Math.PI * 0.3) + (Math.random() - 0.5) * 0.5;
+    const amp = 8 + Math.random() * 20;
+    const freq = 0.008 + Math.random() * 0.015;
+    const alpha = 0.15 + Math.random() * 0.35;
+    const lw = 0.4 + Math.random() * 1.8;
+
     ctx.beginPath();
-    const sx = Math.random() * w, sy = Math.random() * h;
-    ctx.moveTo(sx, sy);
-    for (let j = 0; j < 5; j++) {
-      ctx.bezierCurveTo(Math.random()*w,Math.random()*h,Math.random()*w,Math.random()*h,Math.random()*w,Math.random()*h);
+    let px = startX, py = startY;
+    ctx.moveTo(px, py);
+
+    for (let t = 0; t < 600; t++) {
+      const wave = amp * Math.sin(t * freq) + (amp * 0.4) * Math.sin(t * freq * 2.7 + 1.2);
+      px += Math.cos(mainAngle) * 2 - Math.sin(mainAngle) * wave * 0.02;
+      py += Math.sin(mainAngle) * 2 + Math.cos(mainAngle) * wave * 0.02;
+      ctx.lineTo(px, py);
     }
-    ctx.strokeStyle = veinColor;
-    ctx.lineWidth = 0.5 + Math.random() * 2;
-    ctx.globalAlpha = 0.35 + Math.random() * 0.3;
-    ctx.stroke(); ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = `rgba(${veinR},${veinG},${veinB},${alpha})`;
+    ctx.lineWidth = lw; ctx.stroke();
+
+    if (Math.random() > 0.5) {
+      ctx.beginPath();
+      ctx.moveTo(startX + Math.random()*100-50, startY + Math.random()*100-50);
+      for (let t = 0; t < 200; t++) {
+        const wave = amp * 0.5 * Math.sin(t * freq * 1.5);
+        px += Math.cos(mainAngle + 0.3) * 1.5 - Math.sin(mainAngle) * wave * 0.015;
+        py += Math.sin(mainAngle + 0.3) * 1.5 + Math.cos(mainAngle) * wave * 0.015;
+        ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = `rgba(${veinR},${veinG},${veinB},${alpha * 0.5})`;
+      ctx.lineWidth = lw * 0.5; ctx.stroke();
+    }
   }
   const tex = new THREE.CanvasTexture(c);
   tex.encoding = THREE.sRGBEncoding;
   return tex;
 }
 
-function makeFloorTexture() {
-  const c = document.createElement('canvas'); c.width = 1024; c.height = 1024;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#f2eeea'; ctx.fillRect(0, 0, 1024, 1024);
-  for (let i = 0; i < 18; i++) {
-    ctx.beginPath();
-    ctx.moveTo(Math.random()*1024, Math.random()*1024);
-    for (let j = 0; j < 6; j++) {
-      ctx.bezierCurveTo(Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024);
-    }
-    ctx.strokeStyle = `rgba(${130+Math.random()*40},${30+Math.random()*30},${30+Math.random()*20},${0.3+Math.random()*0.35})`;
-    ctx.lineWidth = 1 + Math.random() * 3; ctx.stroke();
-  }
-  ctx.strokeStyle = '#d0ccc8'; ctx.lineWidth = 3; ctx.globalAlpha = 0.5;
-  for (let x = 0; x <= 1024; x += 256) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,1024); ctx.stroke(); }
-  for (let y = 0; y <= 1024; y += 256) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(1024,y); ctx.stroke(); }
-  ctx.globalAlpha = 1;
-  const tex = new THREE.CanvasTexture(c);
-  tex.encoding = THREE.sRGBEncoding;
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(5, 6);
-  return tex;
-}
+const pisoTex = marbleCanvas(1024, 1024, '#f0ece8', 140, 55, 55);
+pisoTex.wrapS = pisoTex.wrapT = THREE.RepeatWrapping;
+pisoTex.repeat.set(3, 4);
+const bancadaTex = marbleCanvas(512, 512, '#f5f2ee', 155, 135, 105);
+const ilhaTex = marbleCanvas(512, 512, '#f4f1ed', 150, 130, 100);
 
-function makeSubwayTileTexture() {
+function subwayTileTexture() {
   const c = document.createElement('canvas'); c.width = 256; c.height = 128;
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#d5d0cc'; ctx.fillRect(0, 0, 256, 128);
@@ -120,125 +121,192 @@ function makeSubwayTileTexture() {
   return tex;
 }
 
+// ---------- Materiais ----------
 const MAT = {
-  armario: new THREE.MeshPhysicalMaterial({ color: 0xf0efed, roughness: 0.22, metalness: 0.0, clearcoat: 0.7, clearcoatRoughness: 0.08 }),
-  bancada: new THREE.MeshPhysicalMaterial({ map: makeMarbleTexture(512,512,'#f5f1ec','rgba(160,140,110,0.4)',14), roughness: 0.08, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.04 }),
-  ilha: new THREE.MeshPhysicalMaterial({ map: makeMarbleTexture(512,512,'#f3efea','rgba(150,130,100,0.45)',16), roughness: 0.08, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.04 }),
-  inox: new THREE.MeshPhysicalMaterial({ color: 0xb8bcbf, roughness: 0.14, metalness: 0.92 }),
-  piso: new THREE.MeshPhysicalMaterial({ map: makeFloorTexture(), roughness: 0.04, metalness: 0.0, clearcoat: 0.9, clearcoatRoughness: 0.02 }),
-  parede: new THREE.MeshPhysicalMaterial({ color: 0xf8f7f5, roughness: 0.88, metalness: 0.0 }),
-  teto: new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0.0 }),
-  escuro: new THREE.MeshPhysicalMaterial({ color: 0x1c1c1c, roughness: 0.28, metalness: 0.55 }),
-  vidro: new THREE.MeshPhysicalMaterial({ color: 0x9abfe0, roughness: 0.05, metalness: 0.0, transparent: true, opacity: 0.3 }),
-  banqueta: new THREE.MeshPhysicalMaterial({ color: 0x444444, roughness: 0.55, metalness: 0.2 }),
-  subway: new THREE.MeshPhysicalMaterial({ map: makeSubwayTileTexture(), roughness: 0.4, metalness: 0.05 }),
-  grade: new THREE.MeshPhysicalMaterial({ color: 0x888888, roughness: 0.3, metalness: 0.7 }),
-  puxador: new THREE.MeshPhysicalMaterial({ color: 0x9a9a9a, roughness: 0.1, metalness: 0.95 }),
-  cooktop: new THREE.MeshPhysicalMaterial({ color: 0x0d0d0d, roughness: 0.2, metalness: 0.6 }),
+  armario:  new THREE.MeshPhysicalMaterial({ color: 0xf2f0ee, roughness: 0.2, metalness: 0, clearcoat: 0.65, clearcoatRoughness: 0.06 }),
+  bancada:  new THREE.MeshPhysicalMaterial({ map: bancadaTex, roughness: 0.09, metalness: 0, clearcoat: 1.0, clearcoatRoughness: 0.04 }),
+  ilha:     new THREE.MeshPhysicalMaterial({ map: ilhaTex, roughness: 0.09, metalness: 0, clearcoat: 1.0, clearcoatRoughness: 0.04 }),
+  piso:     new THREE.MeshPhysicalMaterial({ map: pisoTex, roughness: 0.12, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.06 }),
+  puxador:  new THREE.MeshPhysicalMaterial({ color: 0x9a9a9a, roughness: 0.08, metalness: 0.95 }),
+  inox:     new THREE.MeshPhysicalMaterial({ color: 0xb8bcbf, roughness: 0.14, metalness: 0.92 }),
+  eletro:   new THREE.MeshPhysicalMaterial({ color: 0x1a1a1a, roughness: 0.2, metalness: 0.6 }),
+  parede:   new THREE.MeshPhysicalMaterial({ color: 0xf8f7f5, roughness: 0.88 }),
+  teto:     new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.92 }),
+  banqueta: new THREE.MeshPhysicalMaterial({ color: 0x3a3a3a, roughness: 0.6, metalness: 0.1 }),
+  haste:    new THREE.MeshPhysicalMaterial({ color: 0x808080, roughness: 0.15, metalness: 0.85 }),
+  subway:   new THREE.MeshPhysicalMaterial({ map: subwayTileTexture(), roughness: 0.4, metalness: 0.05 }),
+  vidro:    new THREE.MeshPhysicalMaterial({ color: 0x9abfe0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.25 }),
+  cooktop:  new THREE.MeshPhysicalMaterial({ color: 0x0d0d0d, roughness: 0.2, metalness: 0.6 }),
+  cromado:  new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.05, metalness: 0.95 }),
 };
 
-function box(mat, w, h, d, x, y, z, cast=true) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
-  m.position.set(x,y,z); m.castShadow=cast; m.receiveShadow=true; scene.add(m); return m;
+function box(mat, w, h, d, x, y, z, cast = true) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true;
+  scene.add(m); return m;
 }
-function cyl(mat, rt, rb, h, seg, x, y, z, cast=true) {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg), mat);
-  m.position.set(x,y,z); m.castShadow=cast; m.receiveShadow=true; scene.add(m); return m;
-}
-
-const W=3.5, D=4.0, H=2.7;
-const piso = new THREE.Mesh(new THREE.PlaneGeometry(W,D), MAT.piso);
-piso.rotation.x=-Math.PI/2; piso.receiveShadow=true; scene.add(piso);
-const teto = new THREE.Mesh(new THREE.PlaneGeometry(W,D), MAT.teto);
-teto.rotation.x=Math.PI/2; teto.position.y=H; scene.add(teto);
-box(MAT.parede,W,H,0.08,0,H/2,-D/2,false);
-box(MAT.parede,0.08,H,D,-W/2,H/2,0,false);
-box(MAT.parede,0.08,H,D,W/2,H/2,0,false);
-box(MAT.parede,W,H,0.08,0,H/2,D/2,false);
-
-const BANCA_H=0.9,BANCA_D=0.6,ARM_H=0.72,ARM_D=0.35,ARM_Y=1.5,TAMPO=0.04;
-box(MAT.armario,W-0.1,BANCA_H,BANCA_D,0,BANCA_H/2,-D/2+BANCA_D/2+0.05);
-box(MAT.bancada,W-0.08,TAMPO,BANCA_D+0.02,0,BANCA_H+TAMPO/2,-D/2+BANCA_D/2+0.05);
-box(MAT.armario,W-0.1,ARM_H,ARM_D,0,ARM_Y+ARM_H/2,-D/2+ARM_D/2+0.05);
-
-const LEN=1.4;
-box(MAT.armario,BANCA_D,BANCA_H,LEN,W/2-BANCA_D/2-0.05,BANCA_H/2,-D/2+LEN/2+0.05);
-box(MAT.bancada,BANCA_D+0.02,TAMPO,LEN,W/2-BANCA_D/2-0.05,BANCA_H+TAMPO/2,-D/2+LEN/2+0.05);
-box(MAT.armario,ARM_D,ARM_H,LEN,W/2-ARM_D/2-0.05,ARM_Y+ARM_H/2,-D/2+LEN/2+0.05);
-
-box(MAT.subway,W-0.12,ARM_Y-BANCA_H-TAMPO-0.02,0.02,0,BANCA_H+TAMPO+(ARM_Y-BANCA_H-TAMPO)/2,-D/2+0.06);
-box(MAT.subway,0.02,ARM_Y-BANCA_H-TAMPO-0.02,LEN-0.1,W/2-0.07,BANCA_H+TAMPO+(ARM_Y-BANCA_H-TAMPO)/2,-D/2+LEN/2+0.05);
-
-for(let xi=-1.5;xi<=1.5;xi+=0.5){
-  const p=cyl(MAT.puxador,0.008,0.008,0.25,8,xi,BANCA_H-0.08,-D/2+BANCA_D+0.07);
-  p.rotation.z=Math.PI/2;
+function cyl(mat, rt, rb, h, seg, x, y, z, cast = true) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat);
+  m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true;
+  scene.add(m); return m;
 }
 
-box(MAT.armario,0.96,0.56,0.08,0,1.55,-D/2+0.05);
-box(MAT.vidro,0.9,0.5,0.03,0,1.55,-D/2+0.06);
-for(let gx=-0.32;gx<=0.36;gx+=0.16){
-  cyl(MAT.grade,0.008,0.008,0.46,8,gx,1.55,-D/2+0.075);
-}
+// ---------- Cômodo (SEM parede da frente — aberta para a câmera) ----------
+const W = 3.5, D = 4.0, H = 2.7;
 
-const GX=-W/2+0.38,GZ=-D/2+0.4;
-box(MAT.inox,0.75,1.95,0.72,GX,1.95/2,GZ);
-box(MAT.inox,0.03,0.5,0.03,GX+0.3,1.4,GZ-0.38);
-box(new THREE.MeshPhysicalMaterial({color:0x666666,roughness:0.2,metalness:0.8}),0.72,0.015,0.68,GX,0.82,GZ);
+const piso = new THREE.Mesh(new THREE.PlaneGeometry(W, D), MAT.piso);
+piso.rotation.x = -Math.PI / 2; piso.receiveShadow = true; scene.add(piso);
 
-const CX=-W/2+0.35,CZ=-D/2+1.4;
-box(MAT.armario,0.65,H-0.1,0.62,CX,(H-0.1)/2,CZ);
-box(MAT.escuro,0.55,0.42,0.52,CX,1.82,CZ);
-box(MAT.inox,0.54,0.01,0.51,CX,1.82+0.21,CZ);
-box(MAT.escuro,0.55,0.5,0.52,CX,1.15,CZ);
-box(MAT.inox,0.54,0.01,0.51,CX,1.15+0.25,CZ);
-box(MAT.inox,0.35,0.02,0.025,CX,1.82+0.15,CZ-0.28);
-box(MAT.inox,0.35,0.02,0.025,CX,1.15+0.18,CZ-0.28);
+const teto = new THREE.Mesh(new THREE.PlaneGeometry(W, D), MAT.teto);
+teto.rotation.x = Math.PI / 2; teto.position.y = H; teto.receiveShadow = true; scene.add(teto);
 
-const TX=-0.55,TZ=-D/2+BANCA_D/2+0.05;
-box(MAT.cooktop,0.72,0.02,0.48,TX,BANCA_H+TAMPO+0.005,TZ);
-[[-0.17,-0.1],[0.17,-0.1],[-0.17,0.1],[0.17,0.1]].forEach(([bx,bz])=>{
-  cyl(new THREE.MeshPhysicalMaterial({color:0x222222,roughness:0.1,metalness:0.7}),0.065,0.065,0.01,16,TX+bx,BANCA_H+TAMPO+0.016,TZ+bz);
+box(MAT.parede, W, H, 0.08, 0, H/2, -D/2, false);      // fundo
+box(MAT.parede, 0.08, H, D, -W/2, H/2, 0, false);      // esquerda
+box(MAT.parede, 0.08, H, D,  W/2, H/2, 0, false);      // direita
+// parede da frente (z = +D/2): REMOVIDA de propósito
+
+// ---------- Bancada em L ----------
+const CT_TOP = 0.9;          // altura da superfície do tampo
+const BASE_H = 0.86, TAMPO = 0.04, BANCA_D = 0.6;
+const ARM_D = 0.35, ARM_H = 0.72, ARM_Y = 1.5;
+
+// Run do fundo (deixa o canto esquerdo livre p/ geladeira e coluna)
+const backX0 = -1.0, backX1 = W/2 - 0.04;
+const backW = backX1 - backX0, backCX = (backX0 + backX1) / 2;
+const backZ = -D/2 + 0.04 + BANCA_D/2;
+box(MAT.armario, backW, BASE_H, BANCA_D, backCX, BASE_H/2, backZ);
+box(MAT.bancada, backW + 0.02, TAMPO, BANCA_D + 0.02, backCX, BASE_H + TAMPO/2, backZ + 0.01);
+
+// Run da direita (parte do fim do run do fundo para frente)
+const RLEN = 1.4;
+const rightX = W/2 - 0.04 - BANCA_D/2;
+const rightZ = -D/2 + 0.04 + BANCA_D + RLEN/2;
+box(MAT.armario, BANCA_D, BASE_H, RLEN, rightX, BASE_H/2, rightZ);
+box(MAT.bancada, BANCA_D + 0.02, TAMPO, RLEN + 0.02, rightX, BASE_H + TAMPO/2, rightZ);
+
+// Armário superior fundo — segmento esquerdo (embute a coifa), deixa vão da janela
+box(MAT.armario, 0.95, ARM_H, ARM_D, -0.6, ARM_Y + ARM_H/2, -D/2 + 0.04 + ARM_D/2);
+// Armário superior fundo — segmento direito (canto)
+box(MAT.armario, 0.55, ARM_H, ARM_D, 1.44, ARM_Y + ARM_H/2, -D/2 + 0.04 + ARM_D/2);
+// Armário superior parede direita
+box(MAT.armario, ARM_D, ARM_H, RLEN, W/2 - 0.04 - ARM_D/2, ARM_Y + ARM_H/2, rightZ);
+
+// Puxadores horizontais (cilindros finos inox)
+[-0.7, -0.15, 0.35, 1.0, 1.5].forEach(px => {
+  const p = cyl(MAT.puxador, 0.008, 0.008, 0.22, 8, px, BASE_H - 0.1, backZ + BANCA_D/2 + 0.015);
+  p.rotation.z = Math.PI / 2;
 });
-box(MAT.inox,0.75,0.14,0.4,TX,ARM_Y+0.07,TZ);
-box(MAT.inox,0.18,ARM_H-0.14,0.18,TX,ARM_Y+0.14+(ARM_H-0.14)/2,TZ);
-
-box(new THREE.MeshPhysicalMaterial({color:0x999999,roughness:0.15,metalness:0.7}),0.55,0.02,0.42,0.6,BANCA_H+TAMPO/2,-D/2+0.32);
-box(new THREE.MeshPhysicalMaterial({color:0x888888,roughness:0.1,metalness:0.8}),0.44,0.14,0.35,0.6,BANCA_H-0.07+TAMPO,-D/2+0.3);
-cyl(MAT.inox,0.012,0.012,0.18,8,0.6,BANCA_H+TAMPO+0.09,-D/2+0.22);
-
-box(MAT.armario,1.25,0.9,0.75,0,0.45,0.65);
-box(MAT.ilha,1.32,0.045,0.82,0,0.922,0.65);
-[-0.38,0.38].forEach(bx=>{
-  cyl(MAT.banqueta,0.16,0.16,0.04,24,bx,1.07,1.17);
-  cyl(MAT.puxador,0.015,0.015,0.2,8,bx,0.96,1.17);
-  cyl(MAT.puxador,0.12,0.12,0.02,24,bx,0.88,1.17);
+[[-0.85, 1.56], [-0.35, 1.56], [1.44, 1.56]].forEach(([px, py]) => {
+  const p = cyl(MAT.puxador, 0.007, 0.007, 0.18, 8, px, py, -D/2 + 0.04 + ARM_D + 0.015);
+  p.rotation.z = Math.PI / 2;
+});
+[-1.0, -0.35].forEach(pz => {
+  const p = cyl(MAT.puxador, 0.008, 0.008, 0.22, 8, rightX - BANCA_D/2 - 0.015, BASE_H - 0.1, pz);
+  p.rotation.x = Math.PI / 2;
 });
 
-[[-1,-1.2],[-1,0.2],[-1,1.4],[0.7,-1.2],[0.7,0.2],[0.7,1.4]].forEach(([sx,sz])=>{
-  cyl(new THREE.MeshPhysicalMaterial({color:0x222222,roughness:0.3}),0.055,0.055,0.025,16,sx,H-0.013,sz,false);
-  const pl=new THREE.PointLight(0xfff7e8,0.55,3.8,2);
-  pl.position.set(sx,H-0.06,sz); scene.add(pl);
+// ---------- Backsplash (subway tile) ----------
+box(MAT.subway, backW, ARM_Y - CT_TOP, 0.02, backCX, CT_TOP + (ARM_Y - CT_TOP)/2, -D/2 + 0.05, false);
+box(MAT.subway, 0.02, ARM_Y - CT_TOP, RLEN, W/2 - 0.05, CT_TOP + (ARM_Y - CT_TOP)/2, rightZ, false);
+
+// ---------- Janela (acima da pia, com sol entrando) ----------
+const JX = 0.6, JY = 1.5;
+box(MAT.armario, 1.06, 0.96, 0.06, JX, JY, -D/2 + 0.045, false);            // moldura branca
+box(MAT.vidro, 0.94, 0.84, 0.02, JX, JY, -D/2 + 0.055, false);              // vidro azulado
+for (let i = -2; i <= 2; i++) {                                              // 5 grades verticais
+  box(MAT.armario, 0.015, 0.84, 0.015, JX + i * 0.19, JY, -D/2 + 0.065, false);
+}
+
+// ---------- Geladeira inox (canto fundo esquerda) ----------
+const GX = -1.4, GZ = -1.6;
+box(MAT.inox, 0.72, 1.95, 0.75, GX, 1.95/2, GZ);
+const gh = cyl(MAT.puxador, 0.012, 0.012, 0.9, 8, GX + 0.37, 1.15, GZ + 0.28);  // handle vertical
+gh.rotation.z = 0;
+
+// ---------- Coluna forno + micro-ondas (parede esquerda) ----------
+const CX = -1.4, CZ = -0.4;
+box(MAT.armario, 0.62, 2.2, 0.68, CX, 1.1, CZ);
+box(MAT.eletro, 0.64, 0.42, 0.52, CX + 0.01, 1.62, CZ);   // micro em cima
+box(MAT.eletro, 0.64, 0.55, 0.52, CX + 0.01, 1.0, CZ);    // forno embaixo
+[[1.78, CZ], [1.22, CZ]].forEach(([hy, hz]) => {           // handles horizontais
+  const p = cyl(MAT.puxador, 0.01, 0.01, 0.4, 8, CX + 0.34, hy, hz);
+  p.rotation.x = Math.PI / 2;
 });
 
-scene.add(new THREE.HemisphereLight(0xffffff,0xf0ece6,0.38));
-const sun=new THREE.DirectionalLight(0xfff9f0,0.95);
-sun.position.set(-0.5,3,-3.5); sun.castShadow=true;
-sun.shadow.mapSize.set(2048,2048);
-sun.shadow.camera.near=0.1; sun.shadow.camera.far=14;
-sun.shadow.camera.left=-4; sun.shadow.camera.right=4;
-sun.shadow.camera.top=4; sun.shadow.camera.bottom=-4;
-sun.shadow.radius=3; sun.shadow.bias=-0.001; scene.add(sun);
-const fill=new THREE.DirectionalLight(0xe8f0ff,0.22);
-fill.position.set(2,1.5,3); scene.add(fill);
+// ---------- Cooktop embutido ----------
+const TX = -0.6;
+const ck = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.46), MAT.cooktop);
+ck.rotation.x = -Math.PI / 2; ck.position.set(TX, 0.906, backZ); ck.receiveShadow = true;
+scene.add(ck);
+[[-0.17, -0.11], [0.17, -0.11], [-0.17, 0.11], [0.17, 0.11]].forEach(([bx, bz]) => {
+  cyl(new THREE.MeshPhysicalMaterial({ color: 0x2a2a2a, roughness: 0.15, metalness: 0.7 }),
+      0.065, 0.065, 0.006, 24, TX + bx, 0.909, backZ + bz, false);
+});
 
-window.addEventListener('resize',()=>{
-  camera.aspect=window.innerWidth/window.innerHeight;
+// ---------- Coifa (embutida no armário superior) ----------
+box(MAT.inox, 0.78, 0.12, 0.38, TX, 1.52, -1.92);
+
+// ---------- Pia (cuba inox + torneira cromada) ----------
+const PX = 0.6;
+box(new THREE.MeshPhysicalMaterial({ color: 0x9fa3a6, roughness: 0.18, metalness: 0.85 }),
+    0.56, 0.012, 0.42, PX, CT_TOP + TAMPO/2 - 0.014, backZ);                 // borda da cuba
+box(new THREE.MeshPhysicalMaterial({ color: 0x74787b, roughness: 0.25, metalness: 0.8 }),
+    0.48, 0.13, 0.34, PX, CT_TOP - 0.08, backZ);                             // cuba encastrada
+cyl(MAT.cromado, 0.014, 0.014, 0.26, 12, PX, CT_TOP + 0.13, backZ - 0.17);   // corpo torneira
+const bica = cyl(MAT.cromado, 0.011, 0.011, 0.17, 12, PX, CT_TOP + 0.25, backZ - 0.09);
+bica.rotation.x = Math.PI / 2;
+
+// ---------- Ilha central + banquetas ----------
+box(MAT.armario, 1.25, BASE_H, 0.75, 0, BASE_H/2, 0.5);
+box(MAT.ilha, 1.32, TAMPO, 0.82, 0, BASE_H + TAMPO/2, 0.5);
+[-0.35, 0.35].forEach(bx => {
+  cyl(MAT.haste, 0.15, 0.15, 0.02, 24, bx, 0.01, 1.25);        // base circular
+  cyl(MAT.haste, 0.02, 0.02, 0.62, 12, bx, 0.32, 1.25);        // haste fina
+  cyl(MAT.banqueta, 0.17, 0.17, 0.05, 24, bx, 0.655, 1.25);    // assento escuro
+});
+
+// ---------- Iluminação ----------
+scene.add(new THREE.HemisphereLight(0xfff5e8, 0xe8e0d8, 0.3));
+
+const sun = new THREE.DirectionalLight(0xfff8f0, 1.1);
+sun.position.set(-1, 4, -3);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 12;
+sun.shadow.camera.left = -4; sun.shadow.camera.right = 4;
+sun.shadow.camera.top = 3; sun.shadow.camera.bottom = -3;
+sun.shadow.radius = 2; sun.shadow.bias = -0.001;
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0xd8e8ff, 0.35);
+fill.position.set(2, 2, 4); scene.add(fill);
+
+// 6 spots embutidos no teto
+[[-1,-1.5],[-1,0],[-1,1.2],[0.8,-1.5],[0.8,0],[0.8,1.2]].forEach(([sx, sz]) => {
+  const fix = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.05, 0.02, 16),
+    new THREE.MeshPhysicalMaterial({ color: 0x1a1a1a })
+  );
+  fix.position.set(sx, H - 0.01, sz); scene.add(fix);
+
+  const pl = new THREE.PointLight(0xffe8c0, 0.5, 3.5, 2);
+  pl.position.set(sx, H - 0.05, sz);
+  scene.add(pl);
+});
+
+// ---------- Loop ----------
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth,window.innerHeight);
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
-document.getElementById('loading').style.opacity='0';
-setTimeout(()=>document.getElementById('loading').style.display='none',600);
-function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);}
+document.getElementById('loading').style.opacity = '0';
+setTimeout(() => document.getElementById('loading').style.display = 'none', 600);
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
 animate();
 </script>
 </body>
