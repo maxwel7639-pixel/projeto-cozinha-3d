@@ -109,20 +109,20 @@ function subwayTileCanvas(w, h) {
   return c;
 }
 
-const backTex = new THREE.CanvasTexture(subwayTileCanvas(512, 384));
+const backTex = new THREE.CanvasTexture(subwayTileCanvas(512, 256));
 backTex.wrapS = backTex.wrapT = THREE.RepeatWrapping;
 backTex.repeat.set(4, 3);
 
 // ---------- Materiais ----------
 const MAT = {
-  armario:  new THREE.MeshStandardMaterial({ color: 0xf8f8f6, roughness: 0.22, metalness: 0.0 }),
+  armario:  new THREE.MeshStandardMaterial({ color: 0xf7f7f5, roughness: 0.22, metalness: 0.0 }),
   bancada:  new THREE.MeshStandardMaterial({ map: bancadaTex, roughness: 0.14, metalness: 0.0 }),
   ilha:     new THREE.MeshStandardMaterial({ map: ilhaTex, roughness: 0.14, metalness: 0.0 }),
   piso:     new THREE.MeshStandardMaterial({ map: pisoTex, roughness: 0.09, metalness: 0.0 }),
   puxador:  new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.08, metalness: 0.95 }),
   inox:     new THREE.MeshStandardMaterial({ color: 0xa8acb0, roughness: 0.08, metalness: 0.92 }),
-  eletro:   new THREE.MeshStandardMaterial({ color: 0x181818, roughness: 0.28, metalness: 0.55 }),
-  parede:   new THREE.MeshStandardMaterial({ color: 0xf4efe8, roughness: 0.88, metalness: 0.0 }),
+  eletro:   new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.28, metalness: 0.55 }),
+  parede:   new THREE.MeshStandardMaterial({ color: 0xf3eee7, roughness: 0.88, metalness: 0.0 }),
   teto:     new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
   banqueta: new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.6, metalness: 0.1 }),
   haste:    new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.15, metalness: 0.85 }),
