@@ -40,7 +40,7 @@
 
 <div id="ui">
   <h1>Cozinha Planejada — Esboço 3D</h1>
-  <p>Cômodo 3,00m x 3,50m · pé-direito 2,70m (estimado). Layout baseado no modelo escolhido: bancada em L, ilha de mármore, coluna de forno/micro-ondas e geladeira inox.</p>
+  <p>Cômodo 3,00m x 3,50m · pé-direito 2,70m (estimado). Bancada em L (parede do fundo + parede direita), ilha central de mármore, coluna de forno/micro-ondas e geladeira inox embutida.</p>
 </div>
 
 <div id="controls-hint">
@@ -52,30 +52,35 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
 (function(){
+  // ---------- Dimensões (cm) ----------
   const ROOM_W = 300, ROOM_D = 350, ROOM_H = 270;
-  const CAB_H = 85, CAB_D = 60, COUNTERTOP_TH = 4;
-  const UPPER_H = 70, UPPER_D = 35, UPPER_GAP = 55;
+  const HW = ROOM_W/2, HD = ROOM_D/2;          // meia-largura / meia-profundidade
+  const CAB_H = 85, CAB_D = 60, TOP_TH = 4;    // bancada: base 85 + tampo 4 = 89
+  const COUNTER_Y = CAB_H + TOP_TH;
   const WINDOW_W = 130, WINDOW_H = 100, WINDOW_SILL = 100;
-  const HW = ROOM_W/2, HD = ROOM_D/2;
 
+  // ---------- Cena / câmera / renderer ----------
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x151515);
-  scene.fog = new THREE.Fog(0x151515, 800, 2000);
+  scene.background = new THREE.Color(0x1a1a1c);
+  scene.fog = new THREE.Fog(0x1a1a1c, 900, 2200);
 
   const container = document.getElementById('canvas-container');
-  const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 1, 5000);
-  camera.position.set(280, 260, 420);
+  const camera = new THREE.PerspectiveCamera(48, window.innerWidth/window.innerHeight, 1, 5000);
+  // ângulo 3/4 vindo da frente-esquerda, mais alto e afastado, mostrando o L (fundo + direita)
+  camera.position.set(-250, 235, 340);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.85;
   container.appendChild(renderer.domElement);
 
   const controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 100, 0);
+  controls.target.set(0, 85, -20);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.maxPolarAngle = Math.PI * 0.49;
@@ -83,78 +88,180 @@
   controls.maxDistance = 900;
   controls.update();
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-  const key = new THREE.DirectionalLight(0xfff2e0, 0.9);
-  key.position.set(150, 400, 250);
+  // ---------- Environment map (essencial p/ metais não ficarem pretos) ----------
+  function makeEnvTexture(){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 128;
+    const ctx = c.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 0, 128);
+    g.addColorStop(0.0, '#b9c6ce');
+    g.addColorStop(0.45, '#ece9e2');
+    g.addColorStop(0.55, '#d9d4ca');
+    g.addColorStop(1.0, '#5a564f');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 128);
+    // "janelas" claras para dar brilho direcional nos reflexos
+    ctx.fillStyle = 'rgba(255,255,250,0.85)';
+    ctx.fillRect(28, 28, 42, 36);
+    ctx.fillRect(150, 24, 54, 42);
+    const tex = new THREE.CanvasTexture(c);
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    return tex;
+  }
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromEquirectangular(makeEnvTexture()).texture;
+
+  // ---------- Iluminação suave ----------
+  scene.add(new THREE.HemisphereLight(0xfff5e8, 0x6e6a63, 0.3));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.1));
+
+  // luz principal quente vinda da frente-esquerda (mesmo lado da câmera → fachadas iluminadas)
+  const key = new THREE.DirectionalLight(0xfff1e0, 0.55);
+  key.position.set(-140, 320, 240);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
-  key.shadow.camera.left = -300; key.shadow.camera.right = 300;
-  key.shadow.camera.top = 300; key.shadow.camera.bottom = -300;
-  key.shadow.camera.near = 10; key.shadow.camera.far = 1200;
-  key.shadow.bias = -0.0015;
+  key.shadow.camera.left = -320; key.shadow.camera.right = 320;
+  key.shadow.camera.top = 320; key.shadow.camera.bottom = -320;
+  key.shadow.camera.near = 10; key.shadow.camera.far = 1400;
+  key.shadow.bias = -0.001;
+  key.shadow.radius = 4;
   scene.add(key);
-  const fill = new THREE.PointLight(0xffe9c7, 0.5, 900);
-  fill.position.set(-100, 220, 100);
+
+  // luz fria vinda da janela (fundo) — contraluz suave, sem sombra
+  const windowLight = new THREE.DirectionalLight(0xdfeaf5, 0.3);
+  windowLight.position.set(0, 190, -320);
+  scene.add(windowLight);
+
+  // preenchimento pela direita para a geladeira/coluna não ficarem chapadas
+  const fill = new THREE.PointLight(0xffe9c7, 0.3, 800, 2);
+  fill.position.set(110, 210, 150);
   scene.add(fill);
 
-  const spotPositions = [[-80,0],[0,0],[80,0],[-80,-100],[0,-100],[80,-100]];
+  // spots de teto discretos
+  const spotPositions = [[-75,-60],[75,-60],[-75,80],[75,80]];
   spotPositions.forEach(([x,z])=>{
-    const spot = new THREE.PointLight(0xfff4dd, 0.35, 260);
-    spot.position.set(x, ROOM_H-8, z);
+    const spot = new THREE.PointLight(0xfff4dd, 0.28, 300, 2);
+    spot.position.set(x, ROOM_H-10, z);
     scene.add(spot);
-    const fixture = new THREE.Mesh(new THREE.CylinderGeometry(4,4,2,16), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffedc4, emissiveIntensity: 0.6 }));
+    const fixture = new THREE.Mesh(
+      new THREE.CylinderGeometry(4,4,2,16),
+      new THREE.MeshStandardMaterial({ color: 0xf5f5f5, emissive: 0xffedc4, emissiveIntensity: 0.5 })
+    );
     fixture.position.set(x, ROOM_H-2, z);
     scene.add(fixture);
   });
 
-  const matWall = new THREE.MeshStandardMaterial({ color: 0xf3f1ec, roughness: 0.92 });
-  const matCeiling = new THREE.MeshStandardMaterial({ color: 0xfaf9f6, roughness: 0.95 });
-  const matCabinet = new THREE.MeshStandardMaterial({ color: 0xf5f5f2, roughness: 0.35, metalness: 0.05 });
-  const matCabinetEdge = new THREE.MeshStandardMaterial({ color: 0xe4e2dc, roughness: 0.4 });
-  const matMarble = new THREE.MeshStandardMaterial({ color: 0xf7f5f0, roughness: 0.15, metalness: 0.05 });
-  const matSteel = new THREE.MeshStandardMaterial({ color: 0xb9bcbf, roughness: 0.25, metalness: 0.85 });
-  const matGlassDark = new THREE.MeshStandardMaterial({ color: 0x9fb7c0, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.55 });
-  const matBacksplash = new THREE.MeshStandardMaterial({ color: 0xe9e6df, roughness: 0.5 });
-  const matStool = new THREE.MeshStandardMaterial({ color: 0xd8d6d0, roughness: 0.5 });
-  const matStoolLeg = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.4, metalness: 0.6 });
-
-  function makeMarbleTexture(){
-    const size = 1024;
-    const cnv = document.createElement('canvas');
-    cnv.width = cnv.height = size;
-    const ctx = cnv.getContext('2d');
-    ctx.fillStyle = '#efe9df';
-    ctx.fillRect(0,0,size,size);
-    for(let i=0;i<40;i++){
-      ctx.strokeStyle = `rgba(150,110,80,${0.05+Math.random()*0.15})`;
-      ctx.lineWidth = 1 + Math.random()*2;
+  // ---------- Texturas procedurais (mármore) ----------
+  function drawVeins(ctx, size, count, colorFn){
+    for(let i=0;i<count;i++){
+      ctx.strokeStyle = colorFn();
+      ctx.lineWidth = 0.6 + Math.random()*2.2;
       ctx.beginPath();
-      const x0 = Math.random()*size, y0 = Math.random()*size;
-      ctx.moveTo(x0,y0);
-      let x=x0,y=y0;
-      for(let j=0;j<6;j++){
-        x += (Math.random()-0.5)*260;
-        y += (Math.random()-0.5)*260;
-        ctx.lineTo(x,y);
+      let x = Math.random()*size, y = Math.random()*size;
+      ctx.moveTo(x,y);
+      const segs = 5 + Math.floor(Math.random()*5);
+      let angle = Math.random()*Math.PI*2;
+      for(let j=0;j<segs;j++){
+        angle += (Math.random()-0.5)*1.2;
+        const len = 30 + Math.random()*90;
+        const cx = x + Math.cos(angle)*len*0.5 + (Math.random()-0.5)*40;
+        const cy = y + Math.sin(angle)*len*0.5 + (Math.random()-0.5)*40;
+        x += Math.cos(angle)*len;
+        y += Math.sin(angle)*len;
+        ctx.quadraticCurveTo(cx, cy, x, y);
       }
       ctx.stroke();
     }
-    ctx.strokeStyle = 'rgba(180,170,155,0.4)';
-    ctx.lineWidth = 3;
-    const tiles = 4;
+  }
+
+  function makeCounterMarble(){
+    const size = 512;
+    const cnv = document.createElement('canvas');
+    cnv.width = cnv.height = size;
+    const ctx = cnv.getContext('2d');
+    ctx.fillStyle = '#f2efe8';
+    ctx.fillRect(0,0,size,size);
+    // manchas suaves
+    for(let i=0;i<14;i++){
+      const gx = Math.random()*size, gy = Math.random()*size, r = 60+Math.random()*140;
+      const rad = ctx.createRadialGradient(gx,gy,0,gx,gy,r);
+      rad.addColorStop(0, `rgba(190,186,176,${0.05+Math.random()*0.08})`);
+      rad.addColorStop(1, 'rgba(190,186,176,0)');
+      ctx.fillStyle = rad;
+      ctx.fillRect(0,0,size,size);
+    }
+    // veios principais cinza + secundários finos dourados
+    ctx.shadowColor = 'rgba(120,118,112,0.35)';
+    ctx.shadowBlur = 3;
+    drawVeins(ctx, size, 12, () => `rgba(110,108,102,${0.18+Math.random()*0.2})`);
+    ctx.shadowBlur = 0;
+    drawVeins(ctx, size, 18, () => `rgba(158,134,98,${0.08+Math.random()*0.1})`);
+    const tex = new THREE.CanvasTexture(cnv);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function makeFloorMarble(){
+    const size = 1024, tiles = 2; // cada tile = 75cm
+    const cnv = document.createElement('canvas');
+    cnv.width = cnv.height = size;
+    const ctx = cnv.getContext('2d');
+    ctx.fillStyle = '#e9e4da';
+    ctx.fillRect(0,0,size,size);
+    for(let i=0;i<20;i++){
+      const gx = Math.random()*size, gy = Math.random()*size, r = 80+Math.random()*200;
+      const rad = ctx.createRadialGradient(gx,gy,0,gx,gy,r);
+      rad.addColorStop(0, `rgba(175,168,155,${0.05+Math.random()*0.09})`);
+      rad.addColorStop(1, 'rgba(175,168,155,0)');
+      ctx.fillStyle = rad;
+      ctx.fillRect(0,0,size,size);
+    }
+    ctx.shadowColor = 'rgba(130,124,114,0.3)';
+    ctx.shadowBlur = 4;
+    drawVeins(ctx, size, 26, () => `rgba(122,116,106,${0.14+Math.random()*0.18})`);
+    ctx.shadowBlur = 0;
+    drawVeins(ctx, size, 32, () => `rgba(148,128,100,${0.07+Math.random()*0.09})`);
+    // rejunte dos porcelanatos
+    ctx.strokeStyle = 'rgba(138,131,118,0.9)';
+    ctx.lineWidth = 5;
     for(let i=0;i<=tiles;i++){
       const p = (size/tiles)*i;
       ctx.beginPath(); ctx.moveTo(p,0); ctx.lineTo(p,size); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0,p); ctx.lineTo(size,p); ctx.stroke();
     }
     const tex = new THREE.CanvasTexture(cnv);
+    tex.encoding = THREE.sRGBEncoding;
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(ROOM_W/150, ROOM_D/150);
     return tex;
   }
-  const floorTex = makeMarbleTexture();
-  const matFloor = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.25, metalness: 0.05 });
 
+  // ---------- Materiais ----------
+  const matWall = new THREE.MeshStandardMaterial({ color: 0xf0ede6, roughness: 0.92 });
+  const matCeiling = new THREE.MeshStandardMaterial({ color: 0xfaf9f6, roughness: 0.95 });
+  const matCabinet = new THREE.MeshStandardMaterial({ color: 0xe9e5dc, roughness: 0.6, metalness: 0.02 });
+  const matGap = new THREE.MeshStandardMaterial({ color: 0x9d9a92, roughness: 0.9 });
+  const matPlinth = new THREE.MeshStandardMaterial({ color: 0x3a3a3c, roughness: 0.7 });
+  const counterTex = makeCounterMarble();
+  const matMarble = new THREE.MeshStandardMaterial({ map: counterTex, roughness: 0.16, metalness: 0.03 });
+  const matBacksplash = new THREE.MeshStandardMaterial({ map: counterTex, color: 0xf5f2ec, roughness: 0.3 });
+  const matInox = new THREE.MeshStandardMaterial({ color: 0xb0b3b5, roughness: 0.38, metalness: 0.8 });
+  const matInoxBrushed = new THREE.MeshStandardMaterial({ color: 0x9a9da0, roughness: 0.48, metalness: 0.75 });
+  const matDarkFrame = new THREE.MeshStandardMaterial({ color: 0x2f3033, roughness: 0.45, metalness: 0.35 });
+  const matBlackGlass = new THREE.MeshStandardMaterial({ color: 0x141518, roughness: 0.08, metalness: 0.55 });
+  const matGlassDark = new THREE.MeshStandardMaterial({ color: 0x8fb0c4, roughness: 0.1, metalness: 0.1, emissive: 0xb8d2e4, emissiveIntensity: 0.5, transparent: true, opacity: 0.9 });
+  const matStool = new THREE.MeshStandardMaterial({ color: 0xd8d6d0, roughness: 0.5 });
+  const matStoolLeg = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.4, metalness: 0.6 });
+  const matFloor = new THREE.MeshStandardMaterial({ map: makeFloorMarble(), roughness: 0.28, metalness: 0.04 });
+
+  // env map forte só nos metais; nos materiais foscos ele lava a cena
+  [matWall, matCeiling, matCabinet, matGap, matPlinth, matStool, matStoolLeg].forEach(m => m.envMapIntensity = 0.25);
+  [matMarble, matBacksplash, matFloor].forEach(m => m.envMapIntensity = 0.5);
+  [matInox, matInoxBrushed].forEach(m => m.envMapIntensity = 0.65);
+  [matBlackGlass, matDarkFrame].forEach(m => m.envMapIntensity = 0.9);
+
+  // ---------- Sala ----------
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), matFloor);
   floor.rotation.x = -Math.PI/2;
   floor.receiveShadow = true;
@@ -165,12 +272,10 @@
   ceiling.position.y = ROOM_H;
   scene.add(ceiling);
 
-  const backWallMat = matWall;
-  const winLeft = -WINDOW_W/2, winRight = WINDOW_W/2;
-  const winBottom = WINDOW_SILL, winTop = WINDOW_SILL+WINDOW_H;
-
+  // parede do fundo com abertura de janela
+  const winBottom = WINDOW_SILL, winTop = WINDOW_SILL + WINDOW_H;
   function wallSegment(w,h,x,y){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 6), backWallMat);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 6), matWall);
     m.position.set(x, y, -HD);
     m.receiveShadow = true;
     return m;
@@ -195,13 +300,16 @@
   const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, ROOM_H), matWall);
   leftWall.rotation.y = Math.PI/2;
   leftWall.position.set(-HW, ROOM_H/2, 0);
+  leftWall.receiveShadow = true;
   scene.add(leftWall);
 
   const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, ROOM_H), matWall);
   rightWall.rotation.y = -Math.PI/2;
   rightWall.position.set(HW, ROOM_H/2, 0);
+  rightWall.receiveShadow = true;
   scene.add(rightWall);
 
+  // ---------- Helpers ----------
   const kitchen = new THREE.Group();
 
   function box(w,h,d,mat){
@@ -210,132 +318,321 @@
     return m;
   }
 
-  const backRunLen = ROOM_W - 20;
-  const backCabinet = box(backRunLen, CAB_H, CAB_D, matCabinet);
-  backCabinet.position.set(0, CAB_H/2, -HD + CAB_D/2 + 2);
+  // frisos verticais (vãos entre portas) na frente dos armários
+  function doorGapsZ(xStart, xEnd, y, h, z, step){
+    for(let x = xStart+step; x < xEnd-4; x += step){
+      const g = box(0.8, h, 0.8, matGap);
+      g.position.set(x, y, z);
+      g.castShadow = false;
+      kitchen.add(g);
+    }
+  }
+  function doorGapsX(zStart, zEnd, y, h, x, step){
+    for(let z = zStart+step; z < zEnd-4; z += step){
+      const g = box(0.8, h, 0.8, matGap);
+      g.position.set(x, y, z);
+      g.castShadow = false;
+      kitchen.add(g);
+    }
+  }
+
+  /* =========================================================
+     LAYOUT EM L:
+       - braço 1: parede do fundo (z = -175), da coluna até o canto direito
+       - braço 2: parede direita (x = +150), do canto até a geladeira
+       - coluna forno/micro na ponta esquerda do braço 1
+       - ilha central com banquetas
+     ========================================================= */
+
+  // ---------- Coluna do forno/micro-ondas (parede do fundo, canto esquerdo) ----------
+  const colW = 65, colD = 62, colH = 220;
+  const colX = -HW + 2 + colW/2;               // -115.5 → ocupa x [-148, -83]
+  const colZ = -HD + 2 + colD/2;               // encostada no fundo; frente em z = -111
+  const colFront = colZ + colD/2;
+
+  const column = box(colW, colH, colD, matCabinet);
+  column.position.set(colX, colH/2, colZ);
+  kitchen.add(column);
+
+  // micro-ondas embutido (moldura escura + vidro + barra)
+  function buildAppliance(cy, frameH, glassH){
+    const frame = box(colW-8, frameH, 6, matDarkFrame);
+    frame.position.set(colX, cy, colFront+2);
+    kitchen.add(frame);
+    const glass = box(colW-18, glassH, 1, matBlackGlass);
+    glass.position.set(colX, cy-2, colFront+5.2);
+    kitchen.add(glass);
+    const strip = box(colW-18, 4.5, 0.8, matDarkFrame);
+    strip.position.set(colX, cy + frameH/2 - 5, colFront+5.2);
+    kitchen.add(strip);
+    const handle = box(colW-20, 2.5, 2.5, matInoxBrushed);
+    handle.position.set(colX, cy - frameH/2 + 4.5, colFront+6.5);
+    kitchen.add(handle);
+  }
+  buildAppliance(168, 42, 28);  // micro-ondas
+  buildAppliance(105, 62, 44);  // forno
+
+  // porta superior e gaveteiros inferiores da coluna
+  const colTopGap = box(colW-8, 0.8, 0.8, matGap);
+  colTopGap.position.set(colX, 205, colFront+0.5);
+  kitchen.add(colTopGap);
+  for(let i=0;i<2;i++){
+    const g = box(colW-8, 0.8, 0.8, matGap);
+    g.position.set(colX, 58 - i*26, colFront+0.5);
+    kitchen.add(g);
+  }
+
+  // ---------- Braço 1: bancada da parede do fundo ----------
+  const backStart = colX + colW/2;             // -83 (depois da coluna)
+  const backEnd = HW - 2;                      // 148 (até o canto direito)
+  const backLen = backEnd - backStart;
+  const backCX = (backStart + backEnd)/2;
+
+  const backPlinth = box(backLen, 10, CAB_D-8, matPlinth);
+  backPlinth.position.set(backCX, 5, -HD + 2 + (CAB_D-8)/2);
+  kitchen.add(backPlinth);
+  const backCabinet = box(backLen, CAB_H-10, CAB_D, matCabinet);
+  backCabinet.position.set(backCX, 10 + (CAB_H-10)/2, -HD + 2 + CAB_D/2);
   kitchen.add(backCabinet);
-  const backTop = box(backRunLen+2, COUNTERTOP_TH, CAB_D+2, matMarble);
-  backTop.position.set(0, CAB_H + COUNTERTOP_TH/2, -HD + CAB_D/2 + 2);
+  const backFront = -HD + 2 + CAB_D;           // z = -113
+  doorGapsZ(backStart, backEnd, 47.5, 71, backFront - 0.2, 46);
+
+  // tampo de mármore com pequeno balanço frontal
+  const backTop = box(backLen + 2, TOP_TH, CAB_D + 3, matMarble);
+  backTop.position.set(backCX, CAB_H + TOP_TH/2, -HD + 2 + (CAB_D+3)/2);
   kitchen.add(backTop);
-  const backsplash = box(backRunLen, UPPER_GAP-6, 2, matBacksplash);
-  backsplash.position.set(0, CAB_H+COUNTERTOP_TH+(UPPER_GAP-6)/2+3, -HD+3);
+
+  // frontão de mármore (backsplash) até a altura da coifa/armários
+  const splashH = 66;
+  const backsplash = box(backLen, splashH, 2, matBacksplash);
+  backsplash.position.set(backCX, COUNTER_Y + splashH/2, -HD + 3);
   kitchen.add(backsplash);
 
-  const upperSideLen = sideW - 4;
-  const upperLeft = box(upperSideLen, UPPER_H, UPPER_D, matCabinet);
-  upperLeft.position.set(-(WINDOW_W/2+upperSideLen/2)-2, CAB_H+COUNTERTOP_TH+UPPER_GAP+UPPER_H/2, -HD+UPPER_D/2+2);
-  kitchen.add(upperLeft);
-  const upperRight = box(upperSideLen, UPPER_H, UPPER_D, matCabinet);
-  upperRight.position.set((WINDOW_W/2+upperSideLen/2)+2, CAB_H+COUNTERTOP_TH+UPPER_GAP+UPPER_H/2, -HD+UPPER_D/2+2);
-  kitchen.add(upperRight);
-  const upperCenter = box(WINDOW_W-10, 35, UPPER_D, matCabinet);
-  upperCenter.position.set(0, ROOM_H-25, -HD+UPPER_D/2+2);
-  kitchen.add(upperCenter);
+  // ---------- Braço 2: bancada da parede direita ----------
+  const rightStart = -HD + 2 + CAB_D;          // z = -113 (canto)
+  const rightEnd = -3;
+  const rightLen = rightEnd - rightStart;
+  const rightCZ = (rightStart + rightEnd)/2;
 
-  const sinkBasin = box(60, 4, 40, matSteel);
-  sinkBasin.position.set(-10, CAB_H+COUNTERTOP_TH+3, -HD+CAB_D/2+2);
-  kitchen.add(sinkBasin);
-  const faucet = box(3,28,3, matSteel);
-  faucet.position.set(-10, CAB_H+COUNTERTOP_TH+16, -HD+8);
-  kitchen.add(faucet);
-
-  const cooktop = box(60, 2, 45, new THREE.MeshStandardMaterial({color:0x1c1c1c, roughness:0.2, metalness:0.6}));
-  cooktop.position.set(70, CAB_H+COUNTERTOP_TH+1, -HD+CAB_D/2+2);
-  kitchen.add(cooktop);
-  for(let i=0;i<4;i++){
-    const burner = new THREE.Mesh(new THREE.RingGeometry(4,6,20), new THREE.MeshStandardMaterial({color:0x333333}));
-    burner.rotation.x = -Math.PI/2;
-    burner.position.set(70 + (i%2===0?-14:14), CAB_H+COUNTERTOP_TH+2.1, -HD+CAB_D/2+2 + (i<2?-10:10));
-    kitchen.add(burner);
-  }
-
-  const hood = box(65, 30, 40, matSteel);
-  hood.position.set(70, ROOM_H-60, -HD+UPPER_D/2+2);
-  kitchen.add(hood);
-
-  const rightRunLen = 110;
-  const rightCabinet = box(CAB_D, CAB_H, rightRunLen, matCabinet);
-  rightCabinet.position.set(HW-CAB_D/2-2, CAB_H/2, -HD+CAB_D+rightRunLen/2+2);
+  const rightPlinth = box(CAB_D-8, 10, rightLen, matPlinth);
+  rightPlinth.position.set(HW - 2 - (CAB_D-8)/2, 5, rightCZ);
+  kitchen.add(rightPlinth);
+  const rightCabinet = box(CAB_D, CAB_H-10, rightLen, matCabinet);
+  rightCabinet.position.set(HW - 2 - CAB_D/2, 10 + (CAB_H-10)/2, rightCZ);
   kitchen.add(rightCabinet);
-  const rightTop = box(CAB_D+2, COUNTERTOP_TH, rightRunLen+2, matMarble);
-  rightTop.position.set(HW-CAB_D/2-2, CAB_H+COUNTERTOP_TH/2, -HD+CAB_D+rightRunLen/2+2);
+  const rightFront = HW - 2 - CAB_D;           // x = 88
+  doorGapsX(rightStart, rightEnd, 47.5, 71, rightFront - 0.2, 46);
+
+  const rightTop = box(CAB_D + 3, TOP_TH, rightLen + 2, matMarble);
+  rightTop.position.set(HW - 2 - (CAB_D+3)/2, CAB_H + TOP_TH/2, rightCZ + 1.5);
   kitchen.add(rightTop);
 
-  const fridgeW = 90, fridgeD = 70, fridgeH = 195;
-  const fridge = box(fridgeW, fridgeH, fridgeD, matSteel);
-  fridge.position.set(HW-fridgeW/2-2, fridgeH/2, -HD+CAB_D+rightRunLen+fridgeD/2+8);
-  kitchen.add(fridge);
-  const fridgeLine = box(fridgeW+1, 2, fridgeD+1, new THREE.MeshStandardMaterial({color:0x2b2b2b, metalness:0.5}));
-  fridgeLine.position.set(fridge.position.x, fridgeH*0.62, fridge.position.z);
-  kitchen.add(fridgeLine);
-  const handle1 = box(3, 60, 3, new THREE.MeshStandardMaterial({color:0x333333, metalness:0.7}));
-  handle1.position.set(fridge.position.x-fridgeW/2-2, fridgeH*0.75, fridge.position.z+fridgeD/2-5);
-  kitchen.add(handle1);
-  const handle2 = box(3, 40, 3, new THREE.MeshStandardMaterial({color:0x333333, metalness:0.7}));
-  handle2.position.set(fridge.position.x-fridgeW/2-2, fridgeH*0.35, fridge.position.z+fridgeD/2-5);
-  kitchen.add(handle2);
+  const rightSplash = box(2, splashH, rightLen, matBacksplash);
+  rightSplash.position.set(HW - 3, COUNTER_Y + splashH/2, rightCZ);
+  kitchen.add(rightSplash);
 
-  const colW = 65, colD = 60, colH = 210;
-  const column = box(colW, colH, colD, matCabinet);
-  column.position.set(-HW+colW/2+2, colH/2, -HD+CAB_D+70);
-  kitchen.add(column);
-  const micro = box(colW-8, 40, 4, matSteel);
-  micro.position.set(column.position.x, colH-45, column.position.z+colD/2+1);
-  kitchen.add(micro);
-  const oven = box(colW-8, 55, 4, matSteel);
-  oven.position.set(column.position.x, colH-140, column.position.z+colD/2+1);
-  kitchen.add(oven);
-  for(let i=0;i<2;i++){
-    const drawer = box(colW-6, 22, 3, matCabinetEdge);
-    drawer.position.set(column.position.x, 45-i*26, column.position.z+colD/2+1.5);
-    kitchen.add(drawer);
+  // ---------- Pia (embaixo da janela) ----------
+  const sinkRim = box(62, 1.5, 46, matInoxBrushed);
+  sinkRim.position.set(0, COUNTER_Y + 0.8, -HD + 2 + CAB_D/2);
+  kitchen.add(sinkRim);
+  const sinkBasin = box(54, 1.2, 38, new THREE.MeshStandardMaterial({ color: 0x6e7173, roughness: 0.35, metalness: 0.7 }));
+  sinkBasin.position.set(0, COUNTER_Y + 1.0, -HD + 2 + CAB_D/2);
+  kitchen.add(sinkBasin);
+  // torneira
+  const faucetBase = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.5, 28, 14), matInox);
+  faucetBase.position.set(0, COUNTER_Y + 14, -HD + 10);
+  faucetBase.castShadow = true;
+  kitchen.add(faucetBase);
+  const faucetArm = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 20, 12), matInox);
+  faucetArm.rotation.x = Math.PI/2;
+  faucetArm.position.set(0, COUNTER_Y + 27, -HD + 19);
+  faucetArm.castShadow = true;
+  kitchen.add(faucetArm);
+  const faucetSpout = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 5, 12), matInox);
+  faucetSpout.position.set(0, COUNTER_Y + 25, -HD + 28);
+  kitchen.add(faucetSpout);
+
+  // ---------- Cooktop (braço do fundo, à direita da janela) ----------
+  const cookX = 100, cookZ = -HD + 2 + CAB_D/2;
+  const cooktop = box(60, 1.5, 45, matBlackGlass);
+  cooktop.position.set(cookX, COUNTER_Y + 0.9, cookZ);
+  kitchen.add(cooktop);
+  const burnerMat = new THREE.MeshStandardMaterial({ color: 0x3c3c3e, roughness: 0.5, metalness: 0.3 });
+  for(let i=0;i<4;i++){
+    const bx = cookX + (i%2===0 ? -14 : 14);
+    const bz = cookZ + (i<2 ? -10 : 10);
+    const burner = new THREE.Mesh(new THREE.RingGeometry(4, 6, 24), burnerMat);
+    burner.rotation.x = -Math.PI/2;
+    burner.position.set(bx, COUNTER_Y + 1.8, bz);
+    kitchen.add(burner);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.6, 16), matDarkFrame);
+    cap.position.set(bx, COUNTER_Y + 1.9, bz);
+    kitchen.add(cap);
   }
 
-  const islandW = 150, islandD = 75, islandH = 90;
-  const islandBase = box(islandW-6, islandH-COUNTERTOP_TH, islandD-6, matCabinet);
-  islandBase.position.set(0, (islandH-COUNTERTOP_TH)/2, 20);
-  kitchen.add(islandBase);
-  const islandTop = box(islandW, COUNTERTOP_TH, islandD, matMarble);
-  islandTop.position.set(0, islandH-COUNTERTOP_TH/2, 20);
-  kitchen.add(islandTop);
-  const waterfall = box(COUNTERTOP_TH, islandH, islandD, matMarble);
-  waterfall.position.set(-islandW/2+1, islandH/2, 20);
-  kitchen.add(waterfall);
+  // ---------- Coifa piramidal inox + duto até o teto ----------
+  const hoodBottomY = COUNTER_Y + 66;          // ~65cm acima do cooktop
+  const hoodRim = box(78, 3, 48, matInox);
+  hoodRim.position.set(cookX, hoodBottomY + 1.5, cookZ - 2);
+  kitchen.add(hoodRim);
+  // pirâmide truncada: cilindro de 4 lados rotacionado 45°, achatado em z
+  const canopy = new THREE.Mesh(new THREE.CylinderGeometry(15, 54, 38, 4, 1), matInox);
+  canopy.rotation.y = Math.PI/4;
+  canopy.scale.z = 0.62;
+  canopy.position.set(cookX, hoodBottomY + 3 + 19, cookZ - 2);
+  canopy.castShadow = true;
+  kitchen.add(canopy);
+  const duct = box(24, ROOM_H - (hoodBottomY + 60), 24, matInoxBrushed);
+  duct.position.set(cookX, (hoodBottomY + 60 + ROOM_H)/2, cookZ - 2);
+  kitchen.add(duct);
 
-  function makeStool(x,z){
+  // ---------- Armários superiores (parede direita, sobre o braço 2) ----------
+  const upperLen = 95, upperH = 70, upperD = 35;
+  const upperCZ = (rightStart + 8 + rightStart + 8 + upperLen)/2;
+  const upperRight = box(upperD, upperH, upperLen, matCabinet);
+  upperRight.position.set(HW - 2 - upperD/2, COUNTER_Y + 55 + upperH/2, rightStart + 8 + upperLen/2);
+  kitchen.add(upperRight);
+  doorGapsX(rightStart + 8, rightStart + 8 + upperLen, COUNTER_Y + 55 + upperH/2, upperH - 4, HW - 2 - upperD - 0.2, 47);
+
+  // ---------- Geladeira inox embutida (parede direita, depois do braço 2) ----------
+  const fridgeW = 90, fridgeD = 70, fridgeH = 195;   // ~90x195x70cm
+  const fridgeX = HW - 2 - fridgeD/2;                // encostada na parede direita
+  const fridgeZ = 5 + fridgeW/2;                     // z [5, 95]
+  const fridgeFront = fridgeX - fridgeD/2;           // x = 78 (porta voltada p/ dentro)
+
+  const fridgeBody = box(fridgeD, fridgeH, fridgeW, matInox);
+  fridgeBody.position.set(fridgeX, fridgeH/2, fridgeZ);
+  kitchen.add(fridgeBody);
+
+  // vãos das portas: divisão vertical em cima (french door) + freezer embaixo
+  const fridgeGapMat = new THREE.MeshStandardMaterial({ color: 0x55585a, roughness: 0.6, metalness: 0.5 });
+  const vGap = box(1, fridgeH - 82, 0.8, fridgeGapMat);
+  vGap.position.set(fridgeFront - 0.2, 80 + (fridgeH-82)/2, fridgeZ);
+  kitchen.add(vGap);
+  const hGap = box(1, 0.8, fridgeW - 2, fridgeGapMat);
+  hGap.position.set(fridgeFront - 0.2, 80, fridgeZ);
+  kitchen.add(hGap);
+
+  // puxadores verticais nas portas superiores + horizontal no freezer
+  const handleL = box(2.2, 70, 2.2, matInoxBrushed);
+  handleL.position.set(fridgeFront - 2.5, 135, fridgeZ - 7);
+  kitchen.add(handleL);
+  const handleR = box(2.2, 70, 2.2, matInoxBrushed);
+  handleR.position.set(fridgeFront - 2.5, 135, fridgeZ + 7);
+  kitchen.add(handleR);
+  const handleF = box(2.2, 2.2, 50, matInoxBrushed);
+  handleF.position.set(fridgeFront - 2.5, 70, fridgeZ);
+  kitchen.add(handleF);
+
+  // rodapé escuro da geladeira
+  const fridgeBase = box(fridgeD - 6, 8, fridgeW - 6, matPlinth);
+  fridgeBase.position.set(fridgeX + 2, 4, fridgeZ);
+  kitchen.add(fridgeBase);
+
+  // armário sobre a geladeira (visual de embutido)
+  const overFridge = box(fridgeD - 4, 48, fridgeW, matCabinet);
+  overFridge.position.set(fridgeX + 1, fridgeH + 4 + 24, fridgeZ);
+  kitchen.add(overFridge);
+  const overGap = box(0.8, 40, 0.8, matGap);
+  overGap.position.set(fridgeFront + 1, fridgeH + 28, fridgeZ);
+  kitchen.add(overGap);
+
+  // ---------- Ilha central de mármore ----------
+  const islW = 130, islD = 80, islH = 90;
+  const islX = -25, islZ = 40;
+
+  const islPlinth = box(islW - 18, 8, islD - 18, matPlinth);
+  islPlinth.position.set(islX, 4, islZ);
+  kitchen.add(islPlinth);
+  const islBase = box(islW - 10, islH - 8 - TOP_TH, islD - 10, matCabinet);
+  islBase.position.set(islX, 8 + (islH - 8 - TOP_TH)/2, islZ);
+  kitchen.add(islBase);
+  // vãos de porta na face voltada para as banquetas
+  [-33, 0, 33].forEach(dx => {
+    const g = box(0.8, islH - 20, 0.8, matGap);
+    g.position.set(islX + dx, (islH - 8)/2 + 4, islZ + (islD-10)/2 + 0.1);
+    g.castShadow = false;
+    kitchen.add(g);
+  });
+
+  const islTop = box(islW, TOP_TH, islD, matMarble);
+  islTop.position.set(islX, islH - TOP_TH/2, islZ);
+  kitchen.add(islTop);
+  // laterais "waterfall" de mármore nas duas pontas
+  [-1, 1].forEach(s => {
+    const wf = box(TOP_TH, islH, islD, matMarble);
+    wf.position.set(islX + s*(islW/2 - TOP_TH/2), islH/2, islZ);
+    kitchen.add(wf);
+  });
+
+  // ---------- Banquetas ----------
+  function makeStool(x, z){
     const g = new THREE.Group();
-    const seat = new THREE.Mesh(new THREE.CylinderGeometry(15,15,4,24), matStool);
-    seat.position.y = 68;
+    const seat = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 4, 24), matStool);
+    seat.position.y = 65;
     seat.castShadow = true;
     g.add(seat);
-    const backRest = box(30, 22, 3, matStool);
-    backRest.position.set(0, 68+13, -13);
+    const backRest = box(28, 20, 3, matStool);
+    backRest.position.set(0, 65 + 12, 13);
     g.add(backRest);
-    const legGeo = new THREE.CylinderGeometry(1.5,1.5,66,10);
-    [[-11,-11],[11,-11],[-11,11],[11,11]].forEach(([dx,dz])=>{
+    const legGeo = new THREE.CylinderGeometry(1.5, 1.5, 63, 10);
+    [[-10,-10],[10,-10],[-10,10],[10,10]].forEach(([dx,dz])=>{
       const leg = new THREE.Mesh(legGeo, matStoolLeg);
-      leg.position.set(dx,33,dz);
+      leg.position.set(dx, 31.5, dz);
+      leg.castShadow = true;
       g.add(leg);
     });
-    g.position.set(x,0,z);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(11, 0.8, 8, 20), matStoolLeg);
+    ring.rotation.x = Math.PI/2;
+    ring.position.y = 20;
+    g.add(ring);
+    g.position.set(x, 0, z);
     return g;
   }
-  kitchen.add(makeStool(-35, 20+islandD/2+22));
-  kitchen.add(makeStool(0, 20+islandD/2+22));
-  kitchen.add(makeStool(35, 20+islandD/2+22));
+  kitchen.add(makeStool(-60, islZ + islD/2 + 20));
+  kitchen.add(makeStool(-25, islZ + islD/2 + 20));
+  kitchen.add(makeStool(10, islZ + islD/2 + 20));
+
+  // ---------- Pendentes sobre a ilha ----------
+  [-55, 5].forEach(px => {
+    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, ROOM_H - 185, 8), matStoolLeg);
+    cord.position.set(px, (ROOM_H + 185)/2, islZ);
+    scene.add(cord);
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(7, 11, 14, 20), matDarkFrame);
+    shade.position.set(px, 180, islZ);
+    shade.castShadow = true;
+    scene.add(shade);
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(3.2, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xfff2d8, emissive: 0xffdf9e, emissiveIntensity: 1.2 })
+    );
+    bulb.position.set(px, 175, islZ);
+    scene.add(bulb);
+    const pl = new THREE.PointLight(0xffe4b0, 0.35, 260, 2);
+    pl.position.set(px, 170, islZ);
+    scene.add(pl);
+  });
 
   scene.add(kitchen);
 
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth/window.innerHeight;
+  // ---------- Resize / loop ----------
+  let viewW = 0, viewH = 0;
+  function syncSize(){
+    const w = window.innerWidth, h = window.innerHeight;
+    if(!w || !h || (w === viewW && h === viewH)) return;
+    viewW = w; viewH = h;
+    camera.aspect = w/h;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+    renderer.setSize(w, h);
+  }
+  window.addEventListener('resize', syncSize);
+  syncSize();
 
   document.getElementById('loading').style.display = 'none';
 
   function animate(){
     requestAnimationFrame(animate);
+    syncSize(); // recupera de viewport 0x0 no carregamento (abas em background)
     controls.update();
     renderer.render(scene, camera);
   }
