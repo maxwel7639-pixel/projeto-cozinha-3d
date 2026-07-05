@@ -33,11 +33,12 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.3;
+renderer.toneMappingExposure = 1.05;
+renderer.setClearColor(0xeeeae4);
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf0f0f0);
+scene.background = new THREE.Color(0xeeeae4);
 
 // ---------- Câmera nível dos olhos ----------
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.05, 30);
@@ -49,89 +50,83 @@ controls.minDistance = 0.8; controls.maxDistance = 7;
 controls.maxPolarAngle = Math.PI * 0.52;
 controls.update();
 
-// ---------- Textura de mármore (veios sinusoidais fluindo) ----------
-function marbleCanvas(w, h, base, veinR, veinG, veinB, strongVeins = false) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
+// ---------- Textura de mármore (veios bezier bem visíveis) ----------
+function marbleCanvas(w, h, baseColor, veinR, veinG, veinB, lineWidthMin, lineWidthMax, numVeins) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = base; ctx.fillRect(0, 0, w, h);
-
-  for (let i = 0; i < 10; i++) {
-    const startX = (Math.random() - 0.5) * w * 2;
-    const startY = Math.random() * h * 2 - h * 0.5;
-    const mainAngle = (Math.PI * 0.3) + (Math.random() - 0.5) * 0.5;
-    const amp = 8 + Math.random() * 20;
-    const freq = 0.008 + Math.random() * 0.015;
-    const alpha = strongVeins ? 0.65 : 0.15 + Math.random() * 0.35;
-    const lw = strongVeins ? 2 + Math.random() * 4 : 0.4 + Math.random() * 1.8;
-
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < numVeins; i++) {
+    const x0 = Math.random() * w;
+    const y0 = Math.random() * h;
+    const angle = Math.random() * Math.PI * 2;
+    const length = 200 + Math.random() * 400;
+    const grad = ctx.createLinearGradient(x0, y0, x0 + Math.cos(angle)*length, y0 + Math.sin(angle)*length);
+    const alpha = 0.45 + Math.random() * 0.5;
+    grad.addColorStop(0, `rgba(${veinR},${veinG},${veinB},0)`);
+    grad.addColorStop(0.3, `rgba(${veinR},${veinG},${veinB},${alpha})`);
+    grad.addColorStop(0.7, `rgba(${veinR},${veinG},${veinB},${alpha})`);
+    grad.addColorStop(1, `rgba(${veinR},${veinG},${veinB},0)`);
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = lineWidthMin + Math.random() * (lineWidthMax - lineWidthMin);
     ctx.beginPath();
-    let px = startX, py = startY;
-    ctx.moveTo(px, py);
-
-    for (let t = 0; t < 600; t++) {
-      const wave = amp * Math.sin(t * freq) + (amp * 0.4) * Math.sin(t * freq * 2.7 + 1.2);
-      px += Math.cos(mainAngle) * 2 - Math.sin(mainAngle) * wave * 0.02;
-      py += Math.sin(mainAngle) * 2 + Math.cos(mainAngle) * wave * 0.02;
-      ctx.lineTo(px, py);
-    }
-
-    ctx.strokeStyle = `rgba(${veinR},${veinG},${veinB},${alpha})`;
-    ctx.lineWidth = lw; ctx.stroke();
-
-    if (Math.random() > 0.5) {
-      ctx.beginPath();
-      ctx.moveTo(startX + Math.random()*100-50, startY + Math.random()*100-50);
-      for (let t = 0; t < 200; t++) {
-        const wave = amp * 0.5 * Math.sin(t * freq * 1.5);
-        px += Math.cos(mainAngle + 0.3) * 1.5 - Math.sin(mainAngle) * wave * 0.015;
-        py += Math.sin(mainAngle + 0.3) * 1.5 + Math.cos(mainAngle) * wave * 0.015;
-        ctx.lineTo(px, py);
-      }
-      ctx.strokeStyle = `rgba(${veinR},${veinG},${veinB},${alpha * 0.5})`;
-      ctx.lineWidth = lw * 0.5; ctx.stroke();
-    }
+    ctx.moveTo(x0, y0);
+    const cx1 = x0 + Math.cos(angle+0.3)*length*0.4 + (Math.random()-0.5)*80;
+    const cy1 = y0 + Math.sin(angle+0.3)*length*0.4 + (Math.random()-0.5)*80;
+    const cx2 = x0 + Math.cos(angle-0.1)*length*0.7 + (Math.random()-0.5)*60;
+    const cy2 = y0 + Math.sin(angle-0.1)*length*0.7 + (Math.random()-0.5)*60;
+    ctx.bezierCurveTo(cx1, cy1, cx2, cy2, x0+Math.cos(angle)*length, y0+Math.sin(angle)*length);
+    ctx.stroke();
   }
-  const tex = new THREE.CanvasTexture(c);
-  return tex;
+  return c;
 }
 
-const pisoTex = marbleCanvas(1024, 1024, '#f0ece8', 120, 45, 45, true);
+const pisoTex = new THREE.CanvasTexture(marbleCanvas(1024, 1024, '#f0ebe4', 90, 45, 45, 1.5, 6, 40));
 pisoTex.wrapS = pisoTex.wrapT = THREE.RepeatWrapping;
 pisoTex.repeat.set(2, 2.5);
-const bancadaTex = marbleCanvas(512, 512, '#f5f2ee', 155, 135, 105);
-const ilhaTex = marbleCanvas(512, 512, '#f4f1ed', 150, 130, 100);
+const bancadaTex = new THREE.CanvasTexture(marbleCanvas(512, 512, '#e8e8e6', 102, 102, 110, 0.5, 2.5, 22));
+bancadaTex.wrapS = bancadaTex.wrapT = THREE.RepeatWrapping;
+bancadaTex.repeat.set(1, 1);
+const ilhaTex = new THREE.CanvasTexture(marbleCanvas(512, 512, '#e8e8e6', 102, 102, 110, 0.5, 2.5, 22));
+ilhaTex.wrapS = ilhaTex.wrapT = THREE.RepeatWrapping;
+ilhaTex.repeat.set(1, 1);
 
-function subwayTileTexture() {
-  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+function subwayTileCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#d5d0cc'; ctx.fillRect(0, 0, 256, 128);
-  ctx.strokeStyle = '#b0aba8'; ctx.lineWidth = 2;
-  for (let row = 0; row < 4; row++) {
-    const offset = (row % 2) * 64;
-    for (let col = -1; col < 5; col++) {
-      ctx.strokeRect(col*128+offset+2, row*32+2, 124, 28);
+  const tW = 120, tH = 58, grout = 5;
+  ctx.fillStyle = '#a8a8a8';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#e4e4e4';
+  for (let row = 0; row * (tH+grout) < h+tH; row++) {
+    const offsetX = (row % 2) * ((tW+grout)/2);
+    for (let col = -1; col * (tW+grout) < w+tW; col++) {
+      ctx.fillRect(offsetX + col*(tW+grout) + grout, row*(tH+grout) + grout, tW-grout, tH-grout);
     }
   }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(4, 2);
-  return tex;
+  return c;
 }
+
+const backTex = new THREE.CanvasTexture(subwayTileCanvas(512, 384));
+backTex.wrapS = backTex.wrapT = THREE.RepeatWrapping;
+backTex.repeat.set(4, 3);
 
 // ---------- Materiais ----------
 const MAT = {
-  armario:  new THREE.MeshStandardMaterial({ color: 0xf8f8f6, roughness: 0.3, metalness: 0.0 }),
-  bancada:  new THREE.MeshStandardMaterial({ map: bancadaTex, roughness: 0.1, metalness: 0.0 }),
-  ilha:     new THREE.MeshStandardMaterial({ map: ilhaTex, roughness: 0.1, metalness: 0.0 }),
-  piso:     new THREE.MeshStandardMaterial({ map: pisoTex, roughness: 0.12, metalness: 0.0 }),
+  armario:  new THREE.MeshStandardMaterial({ color: 0xf8f8f6, roughness: 0.22, metalness: 0.0 }),
+  bancada:  new THREE.MeshStandardMaterial({ map: bancadaTex, roughness: 0.14, metalness: 0.0 }),
+  ilha:     new THREE.MeshStandardMaterial({ map: ilhaTex, roughness: 0.14, metalness: 0.0 }),
+  piso:     new THREE.MeshStandardMaterial({ map: pisoTex, roughness: 0.09, metalness: 0.0 }),
   puxador:  new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.08, metalness: 0.95 }),
-  inox:     new THREE.MeshStandardMaterial({ color: 0xc0c4c7, roughness: 0.12, metalness: 0.88 }),
-  eletro:   new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.2, metalness: 0.6 }),
-  parede:   new THREE.MeshStandardMaterial({ color: 0xf5f4f1, roughness: 0.85, metalness: 0.0 }),
+  inox:     new THREE.MeshStandardMaterial({ color: 0xa8acb0, roughness: 0.08, metalness: 0.92 }),
+  eletro:   new THREE.MeshStandardMaterial({ color: 0x181818, roughness: 0.28, metalness: 0.55 }),
+  parede:   new THREE.MeshStandardMaterial({ color: 0xf4efe8, roughness: 0.88, metalness: 0.0 }),
   teto:     new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
   banqueta: new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.6, metalness: 0.1 }),
   haste:    new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.15, metalness: 0.85 }),
-  subway:   new THREE.MeshStandardMaterial({ map: subwayTileTexture(), roughness: 0.4, metalness: 0.05 }),
+  subway:   new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.5, metalness: 0.0 }),
   vidro:    new THREE.MeshPhysicalMaterial({ color: 0x9abfe0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.25 }),
   cooktop:  new THREE.MeshStandardMaterial({ color: 0x0d0d0d, roughness: 0.2, metalness: 0.6 }),
   cromado:  new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.05, metalness: 0.95 }),
@@ -152,14 +147,14 @@ function cyl(mat, rt, rb, h, seg, x, y, z, cast = true) {
 const W = 3.5, D = 4.0, H = 2.7;
 
 const piso = new THREE.Mesh(new THREE.PlaneGeometry(W, D), MAT.piso);
-piso.rotation.x = -Math.PI / 2; piso.receiveShadow = true; scene.add(piso);
+piso.rotation.x = -Math.PI / 2; piso.castShadow = true; piso.receiveShadow = true; scene.add(piso);
 
 const teto = new THREE.Mesh(new THREE.PlaneGeometry(W, D), MAT.teto);
-teto.rotation.x = Math.PI / 2; teto.position.y = H; teto.receiveShadow = true; scene.add(teto);
+teto.rotation.x = Math.PI / 2; teto.position.y = H; teto.castShadow = true; teto.receiveShadow = true; scene.add(teto);
 
-box(MAT.parede, W, H, 0.08, 0, H/2, -D/2, false);      // fundo
-box(MAT.parede, 0.08, H, D, -W/2, H/2, 0, false);      // esquerda
-box(MAT.parede, 0.08, H, D,  W/2, H/2, 0, false);      // direita
+box(MAT.parede, W, H, 0.08, 0, H/2, -D/2);      // fundo
+box(MAT.parede, 0.08, H, D, -W/2, H/2, 0);      // esquerda
+box(MAT.parede, 0.08, H, D,  W/2, H/2, 0);      // direita
 // parede da frente (z = +D/2): REMOVIDA de propósito
 
 // ---------- Bancada em L ----------
@@ -203,15 +198,15 @@ box(MAT.armario, ARM_D, ARM_H, RLEN, W/2 - 0.04 - ARM_D/2, ARM_Y + ARM_H/2, righ
 });
 
 // ---------- Backsplash (subway tile) ----------
-box(MAT.subway, backW, ARM_Y - CT_TOP, 0.02, backCX, CT_TOP + (ARM_Y - CT_TOP)/2, -D/2 + 0.05, false);
-box(MAT.subway, 0.02, ARM_Y - CT_TOP, RLEN, W/2 - 0.05, CT_TOP + (ARM_Y - CT_TOP)/2, rightZ, false);
+box(MAT.subway, backW, ARM_Y - CT_TOP, 0.02, backCX, CT_TOP + (ARM_Y - CT_TOP)/2, -D/2 + 0.05);
+box(MAT.subway, 0.02, ARM_Y - CT_TOP, RLEN, W/2 - 0.05, CT_TOP + (ARM_Y - CT_TOP)/2, rightZ);
 
 // ---------- Janela (acima da pia, com sol entrando) ----------
 const JX = 0.6, JY = 1.5;
-box(MAT.armario, 1.06, 0.96, 0.06, JX, JY, -D/2 + 0.045, false);            // moldura branca
-box(MAT.vidro, 0.94, 0.84, 0.02, JX, JY, -D/2 + 0.055, false);              // vidro azulado
+box(MAT.armario, 1.06, 0.96, 0.06, JX, JY, -D/2 + 0.045);            // moldura branca
+box(MAT.vidro, 0.94, 0.84, 0.02, JX, JY, -D/2 + 0.055);              // vidro azulado
 for (let i = -2; i <= 2; i++) {                                              // 5 grades verticais
-  box(MAT.armario, 0.015, 0.84, 0.015, JX + i * 0.19, JY, -D/2 + 0.065, false);
+  box(MAT.armario, 0.015, 0.84, 0.015, JX + i * 0.19, JY, -D/2 + 0.065);
 }
 
 // ---------- Geladeira inox (canto fundo esquerda) ----------
@@ -233,11 +228,11 @@ box(MAT.eletro, 0.64, 0.55, 0.52, CX + 0.01, 1.0, CZ);    // forno embaixo
 // ---------- Cooktop embutido ----------
 const TX = -0.6;
 const ck = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.46), MAT.cooktop);
-ck.rotation.x = -Math.PI / 2; ck.position.set(TX, 0.906, backZ); ck.receiveShadow = true;
+ck.rotation.x = -Math.PI / 2; ck.position.set(TX, 0.906, backZ); ck.castShadow = true; ck.receiveShadow = true;
 scene.add(ck);
 [[-0.17, -0.11], [0.17, -0.11], [-0.17, 0.11], [0.17, 0.11]].forEach(([bx, bz]) => {
   cyl(new THREE.MeshPhysicalMaterial({ color: 0x2a2a2a, roughness: 0.15, metalness: 0.7 }),
-      0.065, 0.065, 0.006, 24, TX + bx, 0.909, backZ + bz, false);
+      0.065, 0.065, 0.006, 24, TX + bx, 0.909, backZ + bz);
 });
 
 // ---------- Coifa (embutida no armário superior) ----------
@@ -263,17 +258,17 @@ box(MAT.ilha, 1.32, TAMPO, 0.82, 0, BASE_H + TAMPO/2, 0.5);
 });
 
 // ---------- Iluminação ----------
-// Ambiente forte
-const ambLight = new THREE.AmbientLight(0xffffff, 0.75);
+// Ambiente
+const ambLight = new THREE.AmbientLight(0xffffff, 0.45);
 scene.add(ambLight);
 
 // Hemisférico — ilumina teto e paredes
-const hemi = new THREE.HemisphereLight(0xfff8f0, 0xf0ece8, 0.65);
+const hemi = new THREE.HemisphereLight(0xfff8f0, 0xf0ece8, 0.40);
 scene.add(hemi);
 
-// Sol pela janela do fundo
-const sun = new THREE.DirectionalLight(0xfff6e8, 1.2);
-sun.position.set(-0.5, 3, -3.5);
+// Sol
+const sun = new THREE.DirectionalLight(0xfff6e8, 1.8);
+sun.position.set(3, 4, 2);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 14;
@@ -295,7 +290,7 @@ fill.position.set(2, 2, 4); scene.add(fill);
     new THREE.CylinderGeometry(0.05,0.05,0.025,16),
     new THREE.MeshStandardMaterial({color:0x1a1a1a})
   );
-  fix.position.set(sx, H-0.012, sz); scene.add(fix);
+  fix.position.set(sx, H-0.012, sz); fix.castShadow = true; fix.receiveShadow = true; scene.add(fix);
 });
 
 // ---------- Loop ----------
