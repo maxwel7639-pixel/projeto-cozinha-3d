@@ -1,732 +1,245 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Cozinha 3D — Projeto Realista</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Projeto Cozinha 3D</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
-  #canvas-container { width: 100vw; height: 100vh; display: block; }
+  body { overflow: hidden; background: #1a1a1a; font-family: 'Segoe UI', sans-serif; }
+  canvas { display: block; }
   #ui {
-    position: fixed; top: 0; left: 0; width: 100%;
-    padding: 18px 22px; color: #fff; z-index: 10; pointer-events: none;
-    background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0));
+    position: absolute; top: 20px; left: 20px;
+    color: white; pointer-events: none;
   }
-  #ui h1 { font-size: 17px; font-weight: 600; letter-spacing: 0.3px; }
-  #ui p { font-size: 12.5px; opacity: 0.75; margin-top: 4px; max-width: 520px; line-height: 1.4; }
-  #controls-hint {
-    position: fixed; bottom: 0; left: 0; width: 100%;
-    padding: 14px 22px; color: #fff; z-index: 10;
-    background: linear-gradient(0deg, rgba(0,0,0,0.6), rgba(0,0,0,0));
-    font-size: 12px; opacity: 0.8; display: flex; justify-content: space-between; align-items: flex-end;
-  }
-  #dims {
-    background: rgba(255,255,255,0.08); backdrop-filter: blur(6px);
-    border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
-    padding: 8px 14px; font-size: 12px; pointer-events: auto;
-  }
+  #ui h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.5px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+  #ui p { font-size: 11px; opacity: 0.6; margin-top: 4px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
   #loading {
-    position: fixed; inset: 0; background: #0a0a0a; color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 13px; opacity: 0.7; z-index: 20;
+    position: absolute; inset: 0; display: flex;
+    align-items: center; justify-content: center;
+    background: #111; color: #ccc; font-size: 14px;
+    transition: opacity 0.5s;
   }
 </style>
 </head>
 <body>
-
-<div id="loading">Montando a cozinha...</div>
-<div id="canvas-container"></div>
-
+<div id="loading">Carregando cozinha 3D…</div>
 <div id="ui">
-  <h1>Cozinha Planejada — Visualização 3D</h1>
-  <p>Cômodo 3,50m x 4,00m · pé-direito 2,70m. Bancada em L com cooktop e coifa embutida, ilha central com tampo de mármore, coluna de forno e micro-ondas, geladeira inox.</p>
-</div>
-
-<div id="controls-hint">
-  <div>Arraste para girar · Scroll para zoom · Botão direito para mover</div>
-  <div id="dims">Sala: 3,50 x 4,00 m</div>
+  <h1>Projeto Cozinha — Visualização 3D</h1>
+  <p>Arraste para girar · Scroll para zoom · Clique direito para mover</p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
-'use strict';
-
-// ---------------------------------------------------------------------------
-// Random seeded (determinístico — as texturas ficam iguais em todo reload)
-// ---------------------------------------------------------------------------
-function mulberry32(seed) {
-  return function () {
-    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Texturas procedurais (canvas 2D)
-// ---------------------------------------------------------------------------
-function desenharVeio(ctx, rnd, tam, cor, largura, x0, y0, angulo) {
-  ctx.strokeStyle = cor;
-  ctx.lineWidth = largura;
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  let x = x0, y = y0, ang = angulo;
-  const passos = 3 + Math.floor(rnd() * 3);
-  for (let i = 0; i < passos; i++) {
-    const comp = tam * (0.12 + rnd() * 0.22);
-    ang += (rnd() - 0.5) * 0.9;
-    const cx1 = x + Math.cos(ang) * comp * 0.33 + (rnd() - 0.5) * 30;
-    const cy1 = y + Math.sin(ang) * comp * 0.33 + (rnd() - 0.5) * 30;
-    const cx2 = x + Math.cos(ang) * comp * 0.66 + (rnd() - 0.5) * 30;
-    const cy2 = y + Math.sin(ang) * comp * 0.66 + (rnd() - 0.5) * 30;
-    x += Math.cos(ang) * comp;
-    y += Math.sin(ang) * comp;
-    ctx.bezierCurveTo(cx1, cy1, cx2, cy2, x, y);
-  }
-  ctx.stroke();
-  return { x: x, y: y, ang: ang };
-}
-
-function gerarTexturaMarmore() {
-  const tam = 512;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = tam;
-  const ctx = canvas.getContext('2d');
-  const rnd = mulberry32(1234);
-
-  ctx.fillStyle = '#f8f8f8';
-  ctx.fillRect(0, 0, tam, tam);
-
-  // manchas suaves de fundo (nuvens bege muito claras)
-  for (let i = 0; i < 26; i++) {
-    ctx.fillStyle = 'rgba(205, 195, 188, ' + (0.03 + rnd() * 0.05) + ')';
-    ctx.beginPath();
-    ctx.ellipse(rnd() * tam, rnd() * tam, 40 + rnd() * 120, 20 + rnd() * 70, rnd() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // 8-12 veios finos irregulares com ramificações leves
-  const nVeios = 8 + Math.floor(rnd() * 5);
-  for (let i = 0; i < nVeios; i++) {
-    const x0 = rnd() * tam;
-    const y0 = rnd() < 0.5 ? 0 : rnd() * tam;
-    const ang = Math.PI * 0.25 + rnd() * Math.PI * 0.5;
-    const fim = desenharVeio(ctx, rnd, tam, 'rgba(180, 120, 120, 0.4)', 1 + rnd(), x0, y0, ang);
-    // ramificação
-    if (rnd() < 0.6) {
-      desenharVeio(ctx, rnd, tam * 0.5, 'rgba(180, 120, 120, 0.28)', 1, fim.x, fim.y, fim.ang + (rnd() - 0.5) * 1.4);
-    }
-    // veio cinza/bege de apoio
-    if (rnd() < 0.5) {
-      desenharVeio(ctx, rnd, tam * 0.6, 'rgba(160, 150, 140, 0.3)', 1, rnd() * tam, rnd() * tam, ang + 0.3);
-    }
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.encoding = THREE.sRGBEncoding;
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  return tex;
-}
-
-function gerarTexturaPiso() {
-  // canvas 1024 = 2x2 placas de porcelanato de 60cm (área física: 1.2m x 1.2m)
-  const tam = 1024, meio = 512;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = tam;
-  const ctx = canvas.getContext('2d');
-  const rnd = mulberry32(9876);
-
-  for (let tx = 0; tx < 2; tx++) {
-    for (let ty = 0; ty < 2; ty++) {
-      const ox = tx * meio, oy = ty * meio;
-      // fundo branco com leve variação por placa
-      const v = 244 + Math.floor(rnd() * 8);
-      ctx.fillStyle = 'rgb(' + v + ',' + (v - 2) + ',' + (v - 3) + ')';
-      ctx.fillRect(ox, oy, meio, meio);
-
-      // nuvens suaves
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(ox, oy, meio, meio);
-      ctx.clip();
-      for (let i = 0; i < 8; i++) {
-        ctx.fillStyle = 'rgba(200, 170, 165, ' + (0.03 + rnd() * 0.04) + ')';
-        ctx.beginPath();
-        ctx.ellipse(ox + rnd() * meio, oy + rnd() * meio, 40 + rnd() * 110, 25 + rnd() * 60, rnd() * Math.PI, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // veios avermelhados/vinho mais fortes
-      const nVeios = 4 + Math.floor(rnd() * 3);
-      for (let i = 0; i < nVeios; i++) {
-        const x0 = ox + rnd() * meio;
-        const y0 = oy + (rnd() < 0.5 ? 0 : rnd() * meio);
-        const ang = Math.PI * 0.2 + rnd() * Math.PI * 0.6;
-        const fim = desenharVeio(ctx, rnd, meio, 'rgba(160, 80, 80, 0.5)', 2 + rnd(), x0, y0, ang);
-        if (rnd() < 0.5) {
-          desenharVeio(ctx, rnd, meio * 0.5, 'rgba(160, 80, 80, 0.32)', 1.5, fim.x, fim.y, fim.ang + (rnd() - 0.5) * 1.2);
-        }
-      }
-      ctx.restore();
-    }
-  }
-
-  // rejunte: linhas finas cinza dividindo em placas de 60cm
-  ctx.strokeStyle = '#ccc';
-  ctx.lineWidth = 5;
-  for (let i = 0; i <= 2; i++) {
-    ctx.beginPath(); ctx.moveTo(i * meio, 0); ctx.lineTo(i * meio, tam); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, i * meio); ctx.lineTo(tam, i * meio); ctx.stroke();
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.encoding = THREE.sRGBEncoding;
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  return tex;
-}
-
-function gerarTexturaSubway() {
-  // subway tiles cinza — canvas 512x256 = 4 colunas x 4 fileiras (10cm x 5cm por tile => 0.4m x 0.2m)
-  const larg = 512, alt = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = larg; canvas.height = alt;
-  const ctx = canvas.getContext('2d');
-  const rnd = mulberry32(5555);
-
-  ctx.fillStyle = '#e9e9e9'; // rejunte claro
-  ctx.fillRect(0, 0, larg, alt);
-
-  const tw = 128, th = 64, rejunte = 5;
-  for (let fila = 0; fila < 4; fila++) {
-    const offset = (fila % 2) ? -tw / 2 : 0;
-    for (let col = -1; col < 5; col++) {
-      const x = col * tw + offset;
-      const y = fila * th;
-      const g = 198 + Math.floor(rnd() * 16);
-      ctx.fillStyle = 'rgb(' + g + ',' + g + ',' + (g + 2) + ')';
-      ctx.fillRect(x + rejunte / 2, y + rejunte / 2, tw - rejunte, th - rejunte);
-      // brilho sutil no topo do tile (efeito cerâmica)
-      ctx.fillStyle = 'rgba(255,255,255,0.18)';
-      ctx.fillRect(x + rejunte / 2, y + rejunte / 2, tw - rejunte, 8);
-    }
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.encoding = THREE.sRGBEncoding;
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  return tex;
-}
-
-// ---------------------------------------------------------------------------
-// Renderer / cena / câmera
-// ---------------------------------------------------------------------------
-const container = document.getElementById('canvas-container');
-
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.physicallyCorrectLights = true;
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
-container.appendChild(renderer.domElement);
+renderer.toneMappingExposure = 1.15;
+document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1a1e);
+scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.05, 100);
-camera.position.set(3.5, 1.8, 3.5);
-camera.lookAt(0, 0.9, 0);
+const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.05, 50);
+camera.position.set(3.8, 2.2, 3.8);
 
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.9, 0);
 controls.enableDamping = true;
-controls.dampingFactor = 0.06;
-controls.minDistance = 1.2;
+controls.dampingFactor = 0.08;
+controls.minDistance = 1.0;
 controls.maxDistance = 9;
-controls.maxPolarAngle = Math.PI * 0.495;
+controls.maxPolarAngle = Math.PI * 0.55;
 controls.update();
 
-// ---------------------------------------------------------------------------
-// Environment map (PMREM) — reflexos realistas no inox, mármore e laca
-// ---------------------------------------------------------------------------
-function criarAmbiente() {
-  const envScene = new THREE.Scene();
-
-  const sala = new THREE.Mesh(
-    new THREE.BoxGeometry(12, 8, 12),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.53, 0.5), side: THREE.BackSide })
-  );
-  envScene.add(sala);
-
-  function painelLuz(w, h, x, y, z, ry, r, g, b) {
-    const p = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, h),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b) })
-    );
-    p.position.set(x, y, z);
-    p.rotation.y = ry;
-    envScene.add(p);
+function makeMarbleTexture(w, h, baseColor, veinColor, veinCount) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = baseColor; ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < veinCount; i++) {
+    ctx.beginPath();
+    const sx = Math.random() * w, sy = Math.random() * h;
+    ctx.moveTo(sx, sy);
+    for (let j = 0; j < 5; j++) {
+      ctx.bezierCurveTo(Math.random()*w,Math.random()*h,Math.random()*w,Math.random()*h,Math.random()*w,Math.random()*h);
+    }
+    ctx.strokeStyle = veinColor;
+    ctx.lineWidth = 0.5 + Math.random() * 2;
+    ctx.globalAlpha = 0.35 + Math.random() * 0.3;
+    ctx.stroke(); ctx.globalAlpha = 1;
   }
-  // "janela" fria de um lado, painéis de preenchimento nos outros
-  painelLuz(4, 2.5, 0, 2, -5.9, 0, 5, 5.2, 5.6);
-  painelLuz(3, 1.5, -5.9, 1.5, 0, Math.PI / 2, 2.4, 2.2, 2.0);
-  painelLuz(2, 2, 5.9, 1.8, 1, -Math.PI / 2, 1.6, 1.5, 1.4);
-  const tetoEnv = new THREE.Mesh(
-    new THREE.PlaneGeometry(5, 5),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 3.0, 2.7) })
-  );
-  tetoEnv.position.set(0, 3.9, 0);
-  tetoEnv.rotation.x = Math.PI / 2;
-  envScene.add(tetoEnv);
-
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const envTex = pmrem.fromScene(envScene, 0.04).texture;
-  pmrem.dispose();
-  return envTex;
-}
-scene.environment = criarAmbiente();
-
-// ---------------------------------------------------------------------------
-// Materiais (MeshPhysicalMaterial em tudo)
-// ---------------------------------------------------------------------------
-const matArmario = new THREE.MeshPhysicalMaterial({
-  color: 0xf5f5f5, roughness: 0.25, metalness: 0.0,
-  clearcoat: 0.6, clearcoatRoughness: 0.1
-});
-
-const texMarmore = gerarTexturaMarmore();
-const matMarmore = new THREE.MeshPhysicalMaterial({
-  map: texMarmore, roughness: 0.1, metalness: 0.0,
-  clearcoat: 1.0, clearcoatRoughness: 0.05
-});
-
-const matInox = new THREE.MeshPhysicalMaterial({
-  color: 0xb8b8b8, roughness: 0.15, metalness: 0.9
-});
-
-const matInoxGeladeira = new THREE.MeshPhysicalMaterial({
-  color: 0xb0b0b0, roughness: 0.15, metalness: 0.9
-});
-
-const texPiso = gerarTexturaPiso();
-texPiso.repeat.set(3.5 / 1.2, 4.0 / 1.2);
-texPiso.anisotropy = renderer.capabilities.getMaxAnisotropy();
-const matPiso = new THREE.MeshPhysicalMaterial({
-  map: texPiso, roughness: 0.05, metalness: 0.0,
-  clearcoat: 0.8, clearcoatRoughness: 0.02
-});
-
-const matParede = new THREE.MeshPhysicalMaterial({
-  color: 0xfafafa, roughness: 0.8, metalness: 0.0
-});
-
-const matTeto = new THREE.MeshPhysicalMaterial({
-  color: 0xffffff, roughness: 0.9, metalness: 0.0
-});
-
-const matRodape = new THREE.MeshPhysicalMaterial({ color: 0x2a2a2a, roughness: 0.6, metalness: 0.0 });
-const matVidroPreto = new THREE.MeshPhysicalMaterial({
-  color: 0x0a0a0a, roughness: 0.05, metalness: 0.0,
-  clearcoat: 1.0, clearcoatRoughness: 0.03
-});
-const matPretoFosco = new THREE.MeshPhysicalMaterial({ color: 0x1c1c1c, roughness: 0.55, metalness: 0.2 });
-const matBanqueta = new THREE.MeshPhysicalMaterial({ color: 0x3a3a3e, roughness: 0.65, metalness: 0.0 });
-const matMetalEscuro = new THREE.MeshPhysicalMaterial({ color: 0x333336, roughness: 0.35, metalness: 0.85 });
-
-const texSubway = gerarTexturaSubway();
-const matBacksplash = new THREE.MeshPhysicalMaterial({
-  map: texSubway, roughness: 0.2, metalness: 0.0,
-  clearcoat: 0.5, clearcoatRoughness: 0.08
-});
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function box(w, h, d, mat, x, y, z, parent) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-  m.position.set(x, y, z);
-  m.castShadow = true;
-  m.receiveShadow = true;
-  (parent || scene).add(m);
-  return m;
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
 }
 
-// portas flat-front: painéis lisos com frestas finas entre eles (sem puxador)
-function criarPortas(comprimento, altura, yCentro, parent) {
-  const grupo = new THREE.Group();
-  const n = Math.max(1, Math.round(comprimento / 0.55));
-  const fresta = 0.006;
-  const larguraPorta = (comprimento - fresta * (n - 1)) / n;
-  for (let i = 0; i < n; i++) {
-    const x = -comprimento / 2 + larguraPorta / 2 + i * (larguraPorta + fresta);
-    box(larguraPorta, altura, 0.018, matArmario, x, yCentro, 0, grupo);
+function makeFloorTexture() {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 1024;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f2eeea'; ctx.fillRect(0, 0, 1024, 1024);
+  for (let i = 0; i < 18; i++) {
+    ctx.beginPath();
+    ctx.moveTo(Math.random()*1024, Math.random()*1024);
+    for (let j = 0; j < 6; j++) {
+      ctx.bezierCurveTo(Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024);
+    }
+    ctx.strokeStyle = `rgba(${130+Math.random()*40},${30+Math.random()*30},${30+Math.random()*20},${0.3+Math.random()*0.35})`;
+    ctx.lineWidth = 1 + Math.random() * 3; ctx.stroke();
   }
-  (parent || scene).add(grupo);
-  return grupo;
+  ctx.strokeStyle = '#d0ccc8'; ctx.lineWidth = 3; ctx.globalAlpha = 0.5;
+  for (let x = 0; x <= 1024; x += 256) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,1024); ctx.stroke(); }
+  for (let y = 0; y <= 1024; y += 256) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(1024,y); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(5, 6);
+  return tex;
 }
 
-// ---------------------------------------------------------------------------
-// Cômodo: 3.5m (x) x 4.0m (z) x 2.7m (y)
-// ---------------------------------------------------------------------------
-const ROOM = { xMin: -1.75, xMax: 1.75, zMin: -2.0, zMax: 2.0, h: 2.7 };
-
-// Piso
-const piso = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 4.0), matPiso);
-piso.rotation.x = -Math.PI / 2;
-piso.receiveShadow = true;
-scene.add(piso);
-
-// Paredes (planos de face única — invisíveis vistos de fora, permite orbitar)
-function parede(w, h, x, y, z, ry) {
-  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), matParede);
-  p.position.set(x, y, z);
-  p.rotation.y = ry;
-  p.receiveShadow = true;
-  scene.add(p);
-  return p;
-}
-parede(3.5, 2.7, 0, 1.35, ROOM.zMin, 0);              // fundo
-parede(3.5, 2.7, 0, 1.35, ROOM.zMax, Math.PI);        // frente
-parede(4.0, 2.7, ROOM.xMin, 1.35, 0, Math.PI / 2);    // esquerda
-parede(4.0, 2.7, ROOM.xMax, 1.35, 0, -Math.PI / 2);   // direita
-
-// Teto (forro branco, face para baixo)
-const teto = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 4.0), matTeto);
-teto.rotation.x = Math.PI / 2;
-teto.position.y = ROOM.h;
-teto.receiveShadow = true;
-scene.add(teto);
-
-// ---------------------------------------------------------------------------
-// Iluminação
-// ---------------------------------------------------------------------------
-const ambientLight = new THREE.HemisphereLight(0xffffff, 0xf0e8e0, 0.4);
-scene.add(ambientLight);
-
-// sol entrando pela janela do fundo
-const sunLight = new THREE.DirectionalLight(0xfff8f0, 0.8);
-sunLight.position.set(2, 3, -2);
-sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(2048, 2048);
-sunLight.shadow.camera.near = 0.1;
-sunLight.shadow.camera.far = 20;
-sunLight.shadow.camera.left = -4;
-sunLight.shadow.camera.right = 4;
-sunLight.shadow.camera.top = 4;
-sunLight.shadow.camera.bottom = -4;
-sunLight.shadow.radius = 4;
-sunLight.shadow.bias = -0.0004;
-scene.add(sunLight);
-scene.add(sunLight.target);
-
-// 6 spots embutidos no teto (grid 2x3): aro escuro + disco emissivo + point light
-const matSpotAro = new THREE.MeshPhysicalMaterial({ color: 0x222222, roughness: 0.5, metalness: 0.3 });
-const matSpotLuz = new THREE.MeshBasicMaterial({ color: 0xfff6e6 });
-const spotsX = [-0.8, 0.8];
-const spotsZ = [-1.2, 0, 1.2];
-for (let i = 0; i < spotsX.length; i++) {
-  for (let j = 0; j < spotsZ.length; j++) {
-    const x = spotsX[i], z = spotsZ[j];
-    // aro escuro embutido
-    const aro = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.015, 24), matSpotAro);
-    aro.position.set(x, ROOM.h - 0.008, z);
-    scene.add(aro);
-    // disco de luz visível
-    const disco = new THREE.Mesh(new THREE.CircleGeometry(0.045, 24), matSpotLuz);
-    disco.rotation.x = Math.PI / 2;
-    disco.position.set(x, ROOM.h - 0.017, z);
-    scene.add(disco);
-    // luz real
-    const spot = new THREE.PointLight(0xfff8ee, 0.5, 4, 2);
-    spot.position.set(x, 2.65, z);
-    scene.add(spot);
+function makeSubwayTileTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#d5d0cc'; ctx.fillRect(0, 0, 256, 128);
+  ctx.strokeStyle = '#b0aba8'; ctx.lineWidth = 2;
+  for (let row = 0; row < 4; row++) {
+    const offset = (row % 2) * 64;
+    for (let col = -1; col < 5; col++) {
+      ctx.strokeRect(col*128+offset+2, row*32+2, 124, 28);
+    }
   }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 2);
+  return tex;
 }
 
-// ---------------------------------------------------------------------------
-// Bancada em L (parede do fundo + parede direita)
-// Fundo (z=-2): corre de x=-1.75 a +1.75 | Direita (x=+1.75): z=-2.0 a +0.5
-// ---------------------------------------------------------------------------
-const BANCADA = { prof: 0.6, alt: 0.9, tampo: 0.04 };
+const MAT = {
+  armario: new THREE.MeshPhysicalMaterial({ color: 0xf0efed, roughness: 0.22, metalness: 0.0, clearcoat: 0.7, clearcoatRoughness: 0.08 }),
+  bancada: new THREE.MeshPhysicalMaterial({ map: makeMarbleTexture(512,512,'#f5f1ec','rgba(160,140,110,0.4)',14), roughness: 0.08, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.04 }),
+  ilha: new THREE.MeshPhysicalMaterial({ map: makeMarbleTexture(512,512,'#f3efea','rgba(150,130,100,0.45)',16), roughness: 0.08, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.04 }),
+  inox: new THREE.MeshPhysicalMaterial({ color: 0xb8bcbf, roughness: 0.14, metalness: 0.92 }),
+  piso: new THREE.MeshPhysicalMaterial({ map: makeFloorTexture(), roughness: 0.04, metalness: 0.0, clearcoat: 0.9, clearcoatRoughness: 0.02 }),
+  parede: new THREE.MeshPhysicalMaterial({ color: 0xf8f7f5, roughness: 0.88, metalness: 0.0 }),
+  teto: new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0.0 }),
+  escuro: new THREE.MeshPhysicalMaterial({ color: 0x1c1c1c, roughness: 0.28, metalness: 0.55 }),
+  vidro: new THREE.MeshPhysicalMaterial({ color: 0x9abfe0, roughness: 0.05, metalness: 0.0, transparent: true, opacity: 0.3 }),
+  banqueta: new THREE.MeshPhysicalMaterial({ color: 0x444444, roughness: 0.55, metalness: 0.2 }),
+  subway: new THREE.MeshPhysicalMaterial({ map: makeSubwayTileTexture(), roughness: 0.4, metalness: 0.05 }),
+  grade: new THREE.MeshPhysicalMaterial({ color: 0x888888, roughness: 0.3, metalness: 0.7 }),
+  puxador: new THREE.MeshPhysicalMaterial({ color: 0x9a9a9a, roughness: 0.1, metalness: 0.95 }),
+  cooktop: new THREE.MeshPhysicalMaterial({ color: 0x0d0d0d, roughness: 0.2, metalness: 0.6 }),
+};
 
-// ---- Trecho do fundo -------------------------------------------------------
-(function bancadaFundo() {
-  const larg = 3.5;
-  // soco escuro recuado
-  box(larg - 0.06, 0.1, 0.52, matRodape, 0, 0.05, ROOM.zMin + 0.28);
-  // carcaça
-  box(larg, 0.76, 0.58, matArmario, 0, 0.48, ROOM.zMin + 0.29);
-  // portas flat-front na face frontal (z = -1.42)
-  const portasFundo = criarPortas(larg, 0.74, 0, null);
-  portasFundo.position.set(0, 0.48, ROOM.zMin + 0.585);
-  // tampo de mármore com pequeno balanço
-  box(larg + 0.02, BANCADA.tampo, 0.62, matMarmore, 0, BANCADA.alt - BANCADA.tampo / 2, ROOM.zMin + 0.31);
-})();
-
-// ---- Trecho da direita -----------------------------------------------------
-(function bancadaDireita() {
-  const comp = 1.9; // z de -1.4 a +0.5
-  const zc = -0.45; // centro do trecho
-  box(0.52, 0.1, comp - 0.03, matRodape, ROOM.xMax - 0.28, 0.05, zc);
-  box(0.58, 0.76, comp, matArmario, ROOM.xMax - 0.29, 0.48, zc);
-  const portas = criarPortas(comp, 0.74, 0, null);
-  portas.rotation.y = -Math.PI / 2; // portas viradas para -x
-  portas.position.set(ROOM.xMax - 0.585, 0.48, zc);
-  // tampo emenda no canto do L (cobre de z=-1.38 até +0.52)
-  box(0.62, BANCADA.tampo, 1.9, matMarmore, ROOM.xMax - 0.31, BANCADA.alt - BANCADA.tampo / 2, -0.43);
-})();
-
-// ---------------------------------------------------------------------------
-// Backsplash — subway tiles cinza entre bancada (0.9) e armário superior (1.5)
-// ---------------------------------------------------------------------------
-(function backsplash() {
-  const alt = 0.6;
-  // fundo
-  const texF = texSubway.clone();
-  texF.needsUpdate = true;
-  texF.repeat.set(3.5 / 0.4, alt / 0.2);
-  const matF = matBacksplash.clone();
-  matF.map = texF;
-  const bsFundo = new THREE.Mesh(new THREE.PlaneGeometry(3.5, alt), matF);
-  bsFundo.position.set(0, BANCADA.alt + alt / 2, ROOM.zMin + 0.006);
-  bsFundo.receiveShadow = true;
-  scene.add(bsFundo);
-  // direita
-  const texD = texSubway.clone();
-  texD.needsUpdate = true;
-  texD.repeat.set(2.5 / 0.4, alt / 0.2);
-  const matD = matBacksplash.clone();
-  matD.map = texD;
-  const bsDir = new THREE.Mesh(new THREE.PlaneGeometry(2.5, alt), matD);
-  bsDir.rotation.y = -Math.PI / 2;
-  bsDir.position.set(ROOM.xMax - 0.006, BANCADA.alt + alt / 2, -0.75);
-  bsDir.receiveShadow = true;
-  scene.add(bsDir);
-})();
-
-// ---------------------------------------------------------------------------
-// Armários superiores (y 1.5 -> 2.7, prof 0.35) — com vão para a janela
-// ---------------------------------------------------------------------------
-const SUP = { y0: 1.5, y1: 2.7, prof: 0.35 };
-const supAlt = SUP.y1 - SUP.y0;
-const supYc = (SUP.y0 + SUP.y1) / 2;
-
-function armarioSuperiorFundo(x0, x1) {
-  const larg = x1 - x0;
-  const xc = (x0 + x1) / 2;
-  box(larg, supAlt, SUP.prof, matArmario, xc, supYc, ROOM.zMin + SUP.prof / 2);
-  const portas = criarPortas(larg, supAlt - 0.02, 0, null);
-  portas.position.set(xc, supYc, ROOM.zMin + SUP.prof + 0.005);
+function box(mat, w, h, d, x, y, z, cast=true) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+  m.position.set(x,y,z); m.castShadow=cast; m.receiveShadow=true; scene.add(m); return m;
 }
-// vão central de x=-0.7 a +0.7 para a janela
-armarioSuperiorFundo(ROOM.xMin, -0.7);
-armarioSuperiorFundo(0.7, ROOM.xMax);
-
-// superior da direita (deixa o canto para o módulo do fundo)
-(function armarioSuperiorDireita() {
-  const z0 = -1.65, z1 = 0.5;
-  const comp = z1 - z0;
-  const zc = (z0 + z1) / 2;
-  box(SUP.prof, supAlt, comp, matArmario, ROOM.xMax - SUP.prof / 2, supYc, zc);
-  const portas = criarPortas(comp, supAlt - 0.02, 0, null);
-  portas.rotation.y = -Math.PI / 2;
-  portas.position.set(ROOM.xMax - SUP.prof - 0.005, supYc, zc);
-})();
-
-// ---------------------------------------------------------------------------
-// Cooktop preto embutido na bancada da direita + coifa embutida no superior
-// ---------------------------------------------------------------------------
-(function cooktopECoifa() {
-  const zCook = -0.8;
-  const xCook = ROOM.xMax - 0.31;
-  // placa de vidro preto sobre o tampo
-  box(0.5, 0.012, 0.56, matVidroPreto, xCook, BANCADA.alt + 0.006, zCook);
-  // 4 queimadores (anéis)
-  const posQ = [[-0.11, -0.13], [-0.11, 0.13], [0.11, -0.13], [0.11, 0.13]];
-  posQ.forEach(function (p) {
-    const anel = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.005, 10, 28), matMetalEscuro);
-    anel.rotation.x = -Math.PI / 2;
-    anel.position.set(xCook + p[0], BANCADA.alt + 0.015, zCook + p[1]);
-    anel.castShadow = true;
-    scene.add(anel);
-  });
-  // coifa embutida: faixa inox no fundo do armário superior, acima do cooktop
-  box(0.42, 0.07, 0.62, matInox, ROOM.xMax - 0.22, SUP.y0 - 0.02, zCook);
-  // grelha de exaustão escura por baixo
-  box(0.34, 0.012, 0.5, matPretoFosco, ROOM.xMax - 0.22, SUP.y0 - 0.06, zCook);
-})();
-
-// ---------------------------------------------------------------------------
-// Pia inox centrada na parede do fundo + torneira gooseneck
-// ---------------------------------------------------------------------------
-(function pia() {
-  const zPia = ROOM.zMin + 0.31;
-  // flange da cuba
-  box(0.56, 0.012, 0.44, matInox, 0, BANCADA.alt + 0.004, zPia);
-  // interior rebaixado (escuro para simular profundidade)
-  box(0.46, 0.02, 0.34, new THREE.MeshPhysicalMaterial({ color: 0x555558, roughness: 0.3, metalness: 0.85 }),
-      0, BANCADA.alt - 0.006, zPia);
-  // torneira: base + haste + arco + bica
-  box(0.05, 0.02, 0.05, matInox, 0, BANCADA.alt + 0.02, ROOM.zMin + 0.09);
-  const haste = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.015, 0.26, 16), matInox);
-  haste.position.set(0, BANCADA.alt + 0.15, ROOM.zMin + 0.09);
-  haste.castShadow = true;
-  scene.add(haste);
-  const arco = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.012, 12, 24, Math.PI), matInox);
-  arco.rotation.y = Math.PI / 2;
-  arco.position.set(0, BANCADA.alt + 0.28, ROOM.zMin + 0.175);
-  arco.castShadow = true;
-  scene.add(arco);
-  const bica = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.05, 12), matInox);
-  bica.position.set(0, BANCADA.alt + 0.255, ROOM.zMin + 0.26);
-  scene.add(bica);
-})();
-
-// ---------------------------------------------------------------------------
-// Janela horizontal na parede do fundo (moldura branca + grade de metal)
-// ---------------------------------------------------------------------------
-(function janela() {
-  const w = 1.2, h = 0.6;
-  const yc = 1.95, zc = ROOM.zMin + 0.01;
-  // "céu" — plano emissivo (luz do dia)
-  const ceu = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: 0xdcecf5 }));
-  ceu.position.set(0, yc, zc);
-  scene.add(ceu);
-  // moldura branca
-  const matMoldura = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.0, clearcoat: 0.4 });
-  box(w + 0.1, 0.05, 0.06, matMoldura, 0, yc + h / 2 + 0.025, zc + 0.02);
-  box(w + 0.1, 0.05, 0.06, matMoldura, 0, yc - h / 2 - 0.025, zc + 0.02);
-  box(0.05, h + 0.1, 0.06, matMoldura, -w / 2 - 0.025, yc, zc + 0.02);
-  box(0.05, h + 0.1, 0.06, matMoldura, w / 2 + 0.025, yc, zc + 0.02);
-  // grade de metal (2 verticais + 1 horizontal)
-  box(0.015, h, 0.015, matMetalEscuro, -w / 6, yc, zc + 0.015);
-  box(0.015, h, 0.015, matMetalEscuro, w / 6, yc, zc + 0.015);
-  box(w, 0.015, 0.015, matMetalEscuro, 0, yc, zc + 0.015);
-  // peitoril de mármore
-  box(w + 0.14, 0.025, 0.09, matMarmore, 0, yc - h / 2 - 0.062, zc + 0.035);
-})();
-
-// ---------------------------------------------------------------------------
-// Coluna embutida (esquerda): micro-ondas em cima + forno embaixo
-// ---------------------------------------------------------------------------
-(function colunaForno() {
-  const x0 = ROOM.xMin, prof = 0.6, larg = 0.6, alt = 2.2;
-  const zc = -0.65;
-  const xFrente = x0 + prof;
-  // corpo branco lacado
-  box(prof, alt, larg, matArmario, x0 + prof / 2, alt / 2, zc);
-
-  function aparelho(yc, altura) {
-    // moldura inox levemente saliente
-    box(0.02, altura, 0.54, matInox, xFrente + 0.008, yc, zc);
-    // vidro preto do painel
-    box(0.015, altura - 0.06, 0.46, matVidroPreto, xFrente + 0.02, yc, zc);
-    // barra fina inox no topo do painel
-    box(0.02, 0.02, 0.46, matInox, xFrente + 0.025, yc + altura / 2 - 0.045, zc);
-  }
-  aparelho(1.56, 0.38);  // micro-ondas
-  aparelho(1.05, 0.58);  // forno
-
-  // frentes de armário acima e abaixo dos aparelhos
-  box(0.012, 0.62, 0.56, matArmario, xFrente + 0.004, 1.89, zc); // porta superior
-  box(0.012, 0.72, 0.56, matArmario, xFrente + 0.004, 0.39, zc); // porta inferior
-})();
-
-// ---------------------------------------------------------------------------
-// Geladeira inox — canto direito (depois do fim da bancada, z > 0.5)
-// ---------------------------------------------------------------------------
-(function geladeira() {
-  const w = 0.9, prof = 0.68, alt = 1.92;
-  const zc = 1.02;               // z de 0.57 a 1.47
-  const xc = ROOM.xMax - prof / 2;
-  const xFrente = ROOM.xMax - prof;
-  // corpo
-  box(prof, alt, w, matInoxGeladeira, xc, alt / 2 + 0.02, zc);
-  // frestas das portas (french door: vertical no centro + horizontal do freezer)
-  box(0.012, alt - 0.5, 0.008, matPretoFosco, xFrente - 0.002, (alt + 0.52) / 2, zc);      // vertical
-  box(0.012, 0.008, w - 0.04, matPretoFosco, xFrente - 0.002, 0.72, zc);                   // horizontal
-  // painéis das portas levemente salientes
-  box(0.02, alt - 0.76, w / 2 - 0.03, matInoxGeladeira, xFrente - 0.008, (alt + 0.76) / 2, zc - w / 4 + 0.005);
-  box(0.02, alt - 0.76, w / 2 - 0.03, matInoxGeladeira, xFrente - 0.008, (alt + 0.76) / 2, zc + w / 4 - 0.005);
-  box(0.02, 0.62, w - 0.06, matInoxGeladeira, xFrente - 0.008, 0.39, zc);                  // freezer
-  // base preta
-  box(prof - 0.06, 0.05, w - 0.06, matPretoFosco, xc, 0.025, zc);
-})();
-
-// ---------------------------------------------------------------------------
-// Ilha central: base branca + tampo de mármore + 2 banquetas
-// ---------------------------------------------------------------------------
-(function ilha() {
-  const w = 1.2, d = 0.8, alt = BANCADA.alt;
-  const zc = 0.2;
-  // soco escuro recuado
-  box(w - 0.1, 0.1, d - 0.1, matRodape, 0, 0.05, zc);
-  // corpo branco
-  box(w, 0.76, d, matArmario, 0, 0.48, zc);
-  // portas nos dois lados longos
-  const portasFrente = criarPortas(w, 0.74, 0, null);
-  portasFrente.position.set(0, 0.48, zc + d / 2 + 0.005);
-  const portasTras = criarPortas(w, 0.74, 0, null);
-  portasTras.rotation.y = Math.PI;
-  portasTras.position.set(0, 0.48, zc - d / 2 - 0.005);
-  // tampo de mármore com balanço generoso
-  box(w + 0.12, BANCADA.tampo, d + 0.12, matMarmore, 0, alt - BANCADA.tampo / 2, zc);
-
-  // banquetas altas cinza escuro (lado da frente, viradas para a ilha)
-  function banqueta(x, z) {
-    const g = new THREE.Group();
-    // assento
-    const assento = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.15, 0.06, 28), matBanqueta);
-    assento.position.y = 0.66;
-    assento.castShadow = true;
-    g.add(assento);
-    // coluna central + apoio de pés
-    const coluna = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 16), matMetalEscuro);
-    coluna.position.y = 0.33;
-    coluna.castShadow = true;
-    g.add(coluna);
-    const apoio = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.01, 10, 28), matMetalEscuro);
-    apoio.rotation.x = Math.PI / 2;
-    apoio.position.y = 0.22;
-    g.add(apoio);
-    // base
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.17, 0.03, 28), matMetalEscuro);
-    base.position.y = 0.015;
-    base.castShadow = true;
-    g.add(base);
-    g.position.set(x, 0, z);
-    scene.add(g);
-  }
-  banqueta(-0.3, zc + 0.72);
-  banqueta(0.3, zc + 0.72);
-})();
-
-// ---------------------------------------------------------------------------
-// Loop de render
-// ---------------------------------------------------------------------------
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
+function cyl(mat, rt, rb, h, seg, x, y, z, cast=true) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg), mat);
+  m.position.set(x,y,z); m.castShadow=cast; m.receiveShadow=true; scene.add(m); return m;
 }
-animate();
 
-// esconde o loading após o primeiro frame
-requestAnimationFrame(function () {
-  const el = document.getElementById('loading');
-  if (el) el.style.display = 'none';
+const W=3.5, D=4.0, H=2.7;
+const piso = new THREE.Mesh(new THREE.PlaneGeometry(W,D), MAT.piso);
+piso.rotation.x=-Math.PI/2; piso.receiveShadow=true; scene.add(piso);
+const teto = new THREE.Mesh(new THREE.PlaneGeometry(W,D), MAT.teto);
+teto.rotation.x=Math.PI/2; teto.position.y=H; scene.add(teto);
+box(MAT.parede,W,H,0.08,0,H/2,-D/2,false);
+box(MAT.parede,0.08,H,D,-W/2,H/2,0,false);
+box(MAT.parede,0.08,H,D,W/2,H/2,0,false);
+box(MAT.parede,W,H,0.08,0,H/2,D/2,false);
+
+const BANCA_H=0.9,BANCA_D=0.6,ARM_H=0.72,ARM_D=0.35,ARM_Y=1.5,TAMPO=0.04;
+box(MAT.armario,W-0.1,BANCA_H,BANCA_D,0,BANCA_H/2,-D/2+BANCA_D/2+0.05);
+box(MAT.bancada,W-0.08,TAMPO,BANCA_D+0.02,0,BANCA_H+TAMPO/2,-D/2+BANCA_D/2+0.05);
+box(MAT.armario,W-0.1,ARM_H,ARM_D,0,ARM_Y+ARM_H/2,-D/2+ARM_D/2+0.05);
+
+const LEN=1.4;
+box(MAT.armario,BANCA_D,BANCA_H,LEN,W/2-BANCA_D/2-0.05,BANCA_H/2,-D/2+LEN/2+0.05);
+box(MAT.bancada,BANCA_D+0.02,TAMPO,LEN,W/2-BANCA_D/2-0.05,BANCA_H+TAMPO/2,-D/2+LEN/2+0.05);
+box(MAT.armario,ARM_D,ARM_H,LEN,W/2-ARM_D/2-0.05,ARM_Y+ARM_H/2,-D/2+LEN/2+0.05);
+
+box(MAT.subway,W-0.12,ARM_Y-BANCA_H-TAMPO-0.02,0.02,0,BANCA_H+TAMPO+(ARM_Y-BANCA_H-TAMPO)/2,-D/2+0.06);
+box(MAT.subway,0.02,ARM_Y-BANCA_H-TAMPO-0.02,LEN-0.1,W/2-0.07,BANCA_H+TAMPO+(ARM_Y-BANCA_H-TAMPO)/2,-D/2+LEN/2+0.05);
+
+for(let xi=-1.5;xi<=1.5;xi+=0.5){
+  const p=cyl(MAT.puxador,0.008,0.008,0.25,8,xi,BANCA_H-0.08,-D/2+BANCA_D+0.07);
+  p.rotation.z=Math.PI/2;
+}
+
+box(MAT.armario,0.96,0.56,0.08,0,1.55,-D/2+0.05);
+box(MAT.vidro,0.9,0.5,0.03,0,1.55,-D/2+0.06);
+for(let gx=-0.32;gx<=0.36;gx+=0.16){
+  cyl(MAT.grade,0.008,0.008,0.46,8,gx,1.55,-D/2+0.075);
+}
+
+const GX=-W/2+0.38,GZ=-D/2+0.4;
+box(MAT.inox,0.75,1.95,0.72,GX,1.95/2,GZ);
+box(MAT.inox,0.03,0.5,0.03,GX+0.3,1.4,GZ-0.38);
+box(new THREE.MeshPhysicalMaterial({color:0x666666,roughness:0.2,metalness:0.8}),0.72,0.015,0.68,GX,0.82,GZ);
+
+const CX=-W/2+0.35,CZ=-D/2+1.4;
+box(MAT.armario,0.65,H-0.1,0.62,CX,(H-0.1)/2,CZ);
+box(MAT.escuro,0.55,0.42,0.52,CX,1.82,CZ);
+box(MAT.inox,0.54,0.01,0.51,CX,1.82+0.21,CZ);
+box(MAT.escuro,0.55,0.5,0.52,CX,1.15,CZ);
+box(MAT.inox,0.54,0.01,0.51,CX,1.15+0.25,CZ);
+box(MAT.inox,0.35,0.02,0.025,CX,1.82+0.15,CZ-0.28);
+box(MAT.inox,0.35,0.02,0.025,CX,1.15+0.18,CZ-0.28);
+
+const TX=-0.55,TZ=-D/2+BANCA_D/2+0.05;
+box(MAT.cooktop,0.72,0.02,0.48,TX,BANCA_H+TAMPO+0.005,TZ);
+[[-0.17,-0.1],[0.17,-0.1],[-0.17,0.1],[0.17,0.1]].forEach(([bx,bz])=>{
+  cyl(new THREE.MeshPhysicalMaterial({color:0x222222,roughness:0.1,metalness:0.7}),0.065,0.065,0.01,16,TX+bx,BANCA_H+TAMPO+0.016,TZ+bz);
+});
+box(MAT.inox,0.75,0.14,0.4,TX,ARM_Y+0.07,TZ);
+box(MAT.inox,0.18,ARM_H-0.14,0.18,TX,ARM_Y+0.14+(ARM_H-0.14)/2,TZ);
+
+box(new THREE.MeshPhysicalMaterial({color:0x999999,roughness:0.15,metalness:0.7}),0.55,0.02,0.42,0.6,BANCA_H+TAMPO/2,-D/2+0.32);
+box(new THREE.MeshPhysicalMaterial({color:0x888888,roughness:0.1,metalness:0.8}),0.44,0.14,0.35,0.6,BANCA_H-0.07+TAMPO,-D/2+0.3);
+cyl(MAT.inox,0.012,0.012,0.18,8,0.6,BANCA_H+TAMPO+0.09,-D/2+0.22);
+
+box(MAT.armario,1.25,0.9,0.75,0,0.45,0.65);
+box(MAT.ilha,1.32,0.045,0.82,0,0.922,0.65);
+[-0.38,0.38].forEach(bx=>{
+  cyl(MAT.banqueta,0.16,0.16,0.04,24,bx,1.07,1.17);
+  cyl(MAT.puxador,0.015,0.015,0.2,8,bx,0.96,1.17);
+  cyl(MAT.puxador,0.12,0.12,0.02,24,bx,0.88,1.17);
 });
 
-window.addEventListener('resize', function () {
-  camera.aspect = window.innerWidth / window.innerHeight;
+[[-1,-1.2],[-1,0.2],[-1,1.4],[0.7,-1.2],[0.7,0.2],[0.7,1.4]].forEach(([sx,sz])=>{
+  cyl(new THREE.MeshPhysicalMaterial({color:0x222222,roughness:0.3}),0.055,0.055,0.025,16,sx,H-0.013,sz,false);
+  const pl=new THREE.PointLight(0xfff7e8,0.55,3.8,2);
+  pl.position.set(sx,H-0.06,sz); scene.add(pl);
+});
+
+scene.add(new THREE.HemisphereLight(0xffffff,0xf0ece6,0.38));
+const sun=new THREE.DirectionalLight(0xfff9f0,0.95);
+sun.position.set(-0.5,3,-3.5); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near=0.1; sun.shadow.camera.far=14;
+sun.shadow.camera.left=-4; sun.shadow.camera.right=4;
+sun.shadow.camera.top=4; sun.shadow.camera.bottom=-4;
+sun.shadow.radius=3; sun.shadow.bias=-0.001; scene.add(sun);
+const fill=new THREE.DirectionalLight(0xe8f0ff,0.22);
+fill.position.set(2,1.5,3); scene.add(fill);
+
+window.addEventListener('resize',()=>{
+  camera.aspect=window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(window.innerWidth,window.innerHeight);
 });
+document.getElementById('loading').style.opacity='0';
+setTimeout(()=>document.getElementById('loading').style.display='none',600);
+function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);}
+animate();
 </script>
 </body>
 </html>
