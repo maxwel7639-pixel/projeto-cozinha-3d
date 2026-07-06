@@ -46,8 +46,8 @@ camera.position.set(2.2, 1.55, 2.8);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1.1, -0.8);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
-controls.minDistance = 0.8; controls.maxDistance = 7;
-controls.maxPolarAngle = Math.PI * 0.52;
+controls.minDistance = 0.3; controls.maxDistance = 7;
+controls.maxPolarAngle = Math.PI * 0.75;
 controls.update();
 
 // ---------- Texturas PBR reais ----------
@@ -132,10 +132,10 @@ const backZ = -D/2 + 0.04 + BANCA_D/2;
 box(MAT.armario, backW, BASE_H, BANCA_D, backCX, BASE_H/2, backZ);
 box(MAT.bancada, backW + 0.02, TAMPO, BANCA_D + 0.02, backCX, BASE_H + TAMPO/2, backZ + 0.01);
 
-// Run da direita (parte do fim do run do fundo para frente)
-const RLEN = 1.4;
+// Run da direita (começa onde termina a geladeira, segue até a abertura da ilha)
+const RLEN = 0.585;
 const rightX = W/2 - 0.04 - BANCA_D/2;
-const rightZ = -D/2 + 0.04 + BANCA_D + RLEN/2;
+const rightZ = -0.3325;
 box(MAT.armario, BANCA_D, BASE_H, RLEN, rightX, BASE_H/2, rightZ);
 box(MAT.bancada, BANCA_D + 0.02, TAMPO, RLEN + 0.02, rightX, BASE_H + TAMPO/2, rightZ);
 
@@ -155,7 +155,7 @@ box(MAT.armario, ARM_D, ARM_H, RLEN, W/2 - 0.04 - ARM_D/2, ARM_Y + ARM_H/2, righ
   const p = cyl(MAT.puxador, 0.007, 0.007, 0.18, 8, px, py, -D/2 + 0.04 + ARM_D + 0.015);
   p.rotation.z = Math.PI / 2;
 });
-[-1.0, -0.35].forEach(pz => {
+[-0.52, -0.17].forEach(pz => {
   const p = cyl(MAT.puxador, 0.008, 0.008, 0.22, 8, rightX - BANCA_D/2 - 0.015, BASE_H - 0.1, pz);
   p.rotation.x = Math.PI / 2;
 });
@@ -166,16 +166,20 @@ box(MAT.subway, 0.02, ARM_Y - CT_TOP, RLEN, W/2 - 0.05, CT_TOP + (ARM_Y - CT_TOP
 
 // ---------- Janela (acima da pia, com sol entrando) ----------
 const JX = 0.6, JY = 1.5;
+const gardenMat = new THREE.MeshBasicMaterial({ color: 0x4a7c3f });
+const garden = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.0), gardenMat);
+garden.position.set(JX, JY, -D/2 - 0.5);                            // jardim visível pela janela
+scene.add(garden);
 box(MAT.armario, 1.06, 0.96, 0.06, JX, JY, -D/2 + 0.045);            // moldura branca
 box(MAT.vidro, 0.94, 0.84, 0.02, JX, JY, -D/2 + 0.055);              // vidro azulado
 for (let i = -2; i <= 2; i++) {                                              // 5 grades verticais
   box(MAT.armario, 0.015, 0.84, 0.015, JX + i * 0.19, JY, -D/2 + 0.065);
 }
 
-// ---------- Geladeira inox (canto fundo esquerda) ----------
-const GX = -1.4, GZ = -1.6;
+// ---------- Geladeira inox (parede direita, entre o run direito e a parede do fundo) ----------
+const GX = W/2 - 0.04 - 0.38, GZ = -1.0;
 box(MAT.inox, 0.72, 1.95, 0.75, GX, 1.95/2, GZ);
-const gh = cyl(MAT.puxador, 0.012, 0.012, 0.9, 8, GX + 0.37, 1.15, GZ + 0.28);  // handle vertical
+const gh = cyl(MAT.puxador, 0.012, 0.012, 0.9, 8, GX - 0.34, 1.15, GZ + 0.28);  // handle vertical (lado voltado pro ambiente)
 gh.rotation.z = 0;
 
 // ---------- Coluna forno + micro-ondas (parede esquerda) ----------
@@ -214,6 +218,9 @@ bica.rotation.x = Math.PI / 2;
 // ---------- Ilha central + banquetas ----------
 box(MAT.armario, 1.25, BASE_H, 0.75, 0, BASE_H/2, 0.5);
 box(MAT.ilha, 1.32, TAMPO, 0.82, 0, BASE_H + TAMPO/2, 0.5);
+// Efeito cachoeira (waterfall) — laterais do tampo descem até o chão
+box(MAT.ilha, TAMPO, BASE_H + TAMPO, 0.82, -0.625 - TAMPO/2, (BASE_H + TAMPO)/2, 0.5);
+box(MAT.ilha, TAMPO, BASE_H + TAMPO, 0.82,  0.625 + TAMPO/2, (BASE_H + TAMPO)/2, 0.5);
 [-0.35, 0.35].forEach(bx => {
   cyl(MAT.haste, 0.15, 0.15, 0.02, 24, bx, 0.01, 1.25);        // base circular
   cyl(MAT.haste, 0.02, 0.02, 0.62, 12, bx, 0.32, 1.25);        // haste fina
