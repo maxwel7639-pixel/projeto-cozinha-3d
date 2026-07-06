@@ -50,87 +50,50 @@ controls.minDistance = 0.8; controls.maxDistance = 7;
 controls.maxPolarAngle = Math.PI * 0.52;
 controls.update();
 
-// ---------- Textura de mármore (veios bezier bem visíveis) ----------
-function marbleCanvas(w, h, baseColor, veinR, veinG, veinB, lineWidthMin, lineWidthMax, numVeins) {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = baseColor;
-  ctx.fillRect(0, 0, w, h);
-  for (let i = 0; i < numVeins; i++) {
-    const x0 = Math.random() * w;
-    const y0 = Math.random() * h;
-    const angle = Math.random() * Math.PI * 2;
-    const length = 200 + Math.random() * 400;
-    const grad = ctx.createLinearGradient(x0, y0, x0 + Math.cos(angle)*length, y0 + Math.sin(angle)*length);
-    const alpha = 0.45 + Math.random() * 0.5;
-    grad.addColorStop(0, `rgba(${veinR},${veinG},${veinB},0)`);
-    grad.addColorStop(0.3, `rgba(${veinR},${veinG},${veinB},${alpha})`);
-    grad.addColorStop(0.7, `rgba(${veinR},${veinG},${veinB},${alpha})`);
-    grad.addColorStop(1, `rgba(${veinR},${veinG},${veinB},0)`);
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = lineWidthMin + Math.random() * (lineWidthMax - lineWidthMin);
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    const cx1 = x0 + Math.cos(angle+0.3)*length*0.4 + (Math.random()-0.5)*80;
-    const cy1 = y0 + Math.sin(angle+0.3)*length*0.4 + (Math.random()-0.5)*80;
-    const cx2 = x0 + Math.cos(angle-0.1)*length*0.7 + (Math.random()-0.5)*60;
-    const cy2 = y0 + Math.sin(angle-0.1)*length*0.7 + (Math.random()-0.5)*60;
-    ctx.bezierCurveTo(cx1, cy1, cx2, cy2, x0+Math.cos(angle)*length, y0+Math.sin(angle)*length);
-    ctx.stroke();
-  }
-  return c;
+// ---------- Texturas PBR reais ----------
+const txLoader = new THREE.TextureLoader();
+
+function loadTex(path, repeatX, repeatY) {
+  const t = txLoader.load(path);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeatX, repeatY);
+  return t;
 }
 
-const pisoTex = new THREE.CanvasTexture(marbleCanvas(1024, 1024, '#f0ebe4', 90, 45, 45, 1.5, 6, 40));
-pisoTex.wrapS = pisoTex.wrapT = THREE.RepeatWrapping;
-pisoTex.repeat.set(2, 2.5);
-const bancadaTex = new THREE.CanvasTexture(marbleCanvas(512, 512, '#e8e8e6', 102, 102, 110, 0.5, 2.5, 22));
-bancadaTex.wrapS = bancadaTex.wrapT = THREE.RepeatWrapping;
-bancadaTex.repeat.set(1, 1);
-const ilhaTex = new THREE.CanvasTexture(marbleCanvas(512, 512, '#e8e8e6', 102, 102, 110, 0.5, 2.5, 22));
-ilhaTex.wrapS = ilhaTex.wrapT = THREE.RepeatWrapping;
-ilhaTex.repeat.set(1, 1);
+// Mármore — piso
+const marbleColor    = loadTex('./textures/marble/color.jpg', 2, 2.5);
+const marbleNormal   = loadTex('./textures/marble/normal.jpg', 2, 2.5);
+const marbleRoughMap = loadTex('./textures/marble/roughness.jpg', 2, 2.5);
 
-function subwayTileCanvas(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const ctx = c.getContext('2d');
-  const tW = 120, tH = 58, grout = 5;
-  ctx.fillStyle = '#a8a8a8';
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#e4e4e4';
-  for (let row = 0; row * (tH+grout) < h+tH; row++) {
-    const offsetX = (row % 2) * ((tW+grout)/2);
-    for (let col = -1; col * (tW+grout) < w+tW; col++) {
-      ctx.fillRect(offsetX + col*(tW+grout) + grout, row*(tH+grout) + grout, tW-grout, tH-grout);
-    }
-  }
-  return c;
-}
+// Mármore — bancada e ilha (repeat menor, tampo mais contido)
+const marbleColorTop    = loadTex('./textures/marble/color.jpg', 1, 1);
+const marbleNormalTop   = loadTex('./textures/marble/normal.jpg', 1, 1);
+const marbleRoughMapTop = loadTex('./textures/marble/roughness.jpg', 1, 1);
 
-const backTex = new THREE.CanvasTexture(subwayTileCanvas(512, 256));
-backTex.wrapS = backTex.wrapT = THREE.RepeatWrapping;
-backTex.repeat.set(4, 3);
+// Tile — backsplash
+const tileColor    = loadTex('./textures/tile/color.jpg', 5, 4);
+const tileNormal   = loadTex('./textures/tile/normal.jpg', 5, 4);
+const tileRoughMap = loadTex('./textures/tile/roughness.jpg', 5, 4);
 
 // ---------- Materiais ----------
 const MAT = {
-  armario:  new THREE.MeshStandardMaterial({ color: 0xf7f7f5, roughness: 0.22, metalness: 0.0 }),
-  bancada:  new THREE.MeshStandardMaterial({ map: bancadaTex, roughness: 0.14, metalness: 0.0 }),
-  ilha:     new THREE.MeshStandardMaterial({ map: ilhaTex, roughness: 0.14, metalness: 0.0 }),
-  piso:     new THREE.MeshStandardMaterial({ map: pisoTex, roughness: 0.09, metalness: 0.0 }),
+  armario:  new THREE.MeshStandardMaterial({ color: 0xf7f7f5, roughness: 0.65, metalness: 0.0 }),
+  bancada:  new THREE.MeshStandardMaterial({ map: marbleColorTop, normalMap: marbleNormalTop, roughnessMap: marbleRoughMapTop, roughness: 0.2, metalness: 0.0 }),
+  ilha:     null,
+  piso:     new THREE.MeshStandardMaterial({ map: marbleColor, normalMap: marbleNormal, roughnessMap: marbleRoughMap, roughness: 0.2, metalness: 0.0 }),
   puxador:  new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.08, metalness: 0.95 }),
-  inox:     new THREE.MeshStandardMaterial({ color: 0xa8acb0, roughness: 0.08, metalness: 0.92 }),
-  eletro:   new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.28, metalness: 0.55 }),
+  inox:     new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.3, metalness: 0.9 }),
+  eletro:   new THREE.MeshStandardMaterial({ color: 0x1e1e1e, roughness: 0.3, metalness: 0.9 }),
   parede:   new THREE.MeshStandardMaterial({ color: 0xf3eee7, roughness: 0.88, metalness: 0.0 }),
   teto:     new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
   banqueta: new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.6, metalness: 0.1 }),
   haste:    new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.15, metalness: 0.85 }),
-  subway:   new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.5, metalness: 0.0 }),
+  subway:   new THREE.MeshStandardMaterial({ map: tileColor, normalMap: tileNormal, roughnessMap: tileRoughMap, roughness: 0.3, metalness: 0.0 }),
   vidro:    new THREE.MeshPhysicalMaterial({ color: 0x9abfe0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.25 }),
   cooktop:  new THREE.MeshStandardMaterial({ color: 0x0d0d0d, roughness: 0.2, metalness: 0.6 }),
   cromado:  new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.05, metalness: 0.95 }),
 };
+MAT.ilha = MAT.bancada; // reutilizar mármore da bancada
 
 function box(mat, w, h, d, x, y, z, cast = true) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -283,7 +246,7 @@ fill.position.set(2, 2, 4); scene.add(fill);
 
 // 6 spots do teto — luz quente forte
 [[-1,-1.5],[-1,0],[-1,1.2],[0.8,-1.5],[0.8,0],[0.8,1.2]].forEach(([sx,sz]) => {
-  const pl = new THREE.PointLight(0xffe0a0, 0.9, 4.5, 2);
+  const pl = new THREE.PointLight(0xfff4e0, 1.0, 4.5, 2);
   pl.position.set(sx, H - 0.08, sz); scene.add(pl);
   // Fixture escuro no teto
   const fix = new THREE.Mesh(
