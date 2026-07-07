@@ -42,9 +42,9 @@ scene.background = new THREE.Color(0xeeeae4);
 
 // ---------- Câmera nível dos olhos ----------
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.05, 30);
-camera.position.set(2.2, 1.55, 2.8);
+camera.position.set(0.15, 1.65, 3.5);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1.1, -0.8);
+controls.target.set(0, 1.0, -0.6);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.minDistance = 0.3; controls.maxDistance = 7;
 controls.maxPolarAngle = Math.PI * 0.75;
@@ -92,6 +92,7 @@ const MAT = {
   vidro:    new THREE.MeshPhysicalMaterial({ color: 0x9abfe0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.25 }),
   cooktop:  new THREE.MeshStandardMaterial({ color: 0x0d0d0d, roughness: 0.2, metalness: 0.6 }),
   cromado:  new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.05, metalness: 0.95 }),
+  gesso:    new THREE.MeshStandardMaterial({ color: 0xf4f1ec, roughness: 0.95, metalness: 0.0 }),
 };
 MAT.ilha = MAT.bancada; // reutilizar mármore da bancada
 
@@ -115,116 +116,140 @@ piso.rotation.x = -Math.PI / 2; piso.castShadow = true; piso.receiveShadow = tru
 const teto = new THREE.Mesh(new THREE.PlaneGeometry(W, D), MAT.teto);
 teto.rotation.x = Math.PI / 2; teto.position.y = H; teto.castShadow = true; teto.receiveShadow = true; scene.add(teto);
 
-box(MAT.parede, W, H, 0.08, 0, H/2, -D/2);      // fundo
+// parede do fundo em segmentos — deixa o vão da janela (x -0.75..0.75, y 1.025..2.075) aberto
+box(MAT.parede, W, 1.025, 0.08, 0, 0.5125, -D/2);                     // abaixo da janela
+box(MAT.parede, W, H - 2.075, 0.08, 0, (H + 2.075)/2, -D/2);          // acima da janela
+box(MAT.parede, W/2 - 0.75, 1.05, 0.08, (-W/2 - 0.75)/2, 1.55, -D/2); // à esquerda da janela
+box(MAT.parede, W/2 - 0.75, 1.05, 0.08, ( W/2 + 0.75)/2, 1.55, -D/2); // à direita da janela
 box(MAT.parede, 0.08, H, D, -W/2, H/2, 0);      // esquerda
 box(MAT.parede, 0.08, H, D,  W/2, H/2, 0);      // direita
 // parede da frente (z = +D/2): REMOVIDA de propósito
 
-// ---------- Bancada em L ----------
+// ---------- Dimensões base ----------
 const CT_TOP = 0.9;          // altura da superfície do tampo
 const BASE_H = 0.86, TAMPO = 0.04, BANCA_D = 0.6;
-const ARM_D = 0.35, ARM_H = 0.72, ARM_Y = 1.5;
+const ARM_D = 0.35, ARM_H = 0.72, ARM_Y = 1.5;   // Y da base dos armários superiores
 
-// Run do fundo (deixa o canto esquerdo livre p/ geladeira e coluna)
-const backX0 = -1.0, backX1 = W/2 - 0.04;
-const backW = backX1 - backX0, backCX = (backX0 + backX1) / 2;
-const backZ = -D/2 + 0.04 + BANCA_D/2;
-box(MAT.armario, backW, BASE_H, BANCA_D, backCX, BASE_H/2, backZ);
-box(MAT.bancada, backW + 0.02, TAMPO, BANCA_D + 0.02, backCX, BASE_H + TAMPO/2, backZ + 0.01);
+const wallBack  = -D/2 + 0.04;   // face interna parede fundo    = -1.96
+const wallLeft  = -W/2 + 0.04;   // face interna parede esquerda = -1.71
+const wallRight =  W/2 - 0.04;   // face interna parede direita  =  1.71
+const backZ  = wallBack  + BANCA_D/2;   // -1.66
+const leftX  = wallLeft  + BANCA_D/2;   // -1.41
+const rightX = wallRight - BANCA_D/2;   //  1.41
+const leftInner  = leftX  + BANCA_D/2;  // -1.11 (onde a perna do fundo encosta na esquerda)
+const rightInner = rightX - BANCA_D/2;  //  1.11 (idem direita)
 
-// Run da direita (começa onde termina a geladeira, segue até a abertura da ilha)
-const RLEN = 0.585;
-const rightX = W/2 - 0.04 - BANCA_D/2;
-const rightZ = -0.3325;
-box(MAT.armario, BANCA_D, BASE_H, RLEN, rightX, BASE_H/2, rightZ);
-box(MAT.bancada, BANCA_D + 0.02, TAMPO, RLEN + 0.02, rightX, BASE_H + TAMPO/2, rightZ);
+// ---------- Janela grande (fundo, centralizada sobre a pia) ----------
+const JX = 0, JY = 1.55, JW = 1.5, JH = 1.05;
+// vista de jardim em camadas (dá profundidade atrás do vão)
+const gA = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.8), new THREE.MeshBasicMaterial({ color: 0xa8cf77 }));
+gA.position.set(JX, JY, wallBack - 1.0); scene.add(gA);
+const gB = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.1), new THREE.MeshBasicMaterial({ color: 0x4f8341 }));
+gB.position.set(JX, JY - 0.1, wallBack - 0.6); scene.add(gB);
+const gC = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.55), new THREE.MeshBasicMaterial({ color: 0x35632c }));
+gC.position.set(JX, JY - 0.35, wallBack - 0.35); scene.add(gC);
+// moldura + vidro + montantes
+box(MAT.armario, JW + 0.12, JH + 0.12, 0.06, JX, JY, wallBack + 0.02);
+box(MAT.vidro,   JW, JH, 0.02, JX, JY, wallBack + 0.04);
+box(MAT.armario, 0.03, JH, 0.02, JX, JY, wallBack + 0.05);   // montante vertical
+box(MAT.armario, JW, 0.03, 0.02, JX, JY, wallBack + 0.05);   // travessa horizontal
 
-// Armário superior fundo — segmento esquerdo (embute a coifa), deixa vão da janela
-box(MAT.armario, 0.95, ARM_H, ARM_D, -0.6, ARM_Y + ARM_H/2, -D/2 + 0.04 + ARM_D/2);
-// Armário superior fundo — segmento direito (canto)
-box(MAT.armario, 0.55, ARM_H, ARM_D, 1.44, ARM_Y + ARM_H/2, -D/2 + 0.04 + ARM_D/2);
-// Armário superior parede direita
-box(MAT.armario, ARM_D, ARM_H, RLEN, W/2 - 0.04 - ARM_D/2, ARM_Y + ARM_H/2, rightZ);
+// ---------- Bancada em U (fundo + esquerda + direita) ----------
+// Perna do FUNDO (pia sob a janela)
+const backW = rightInner - leftInner;               // 2.22
+box(MAT.armario, backW, BASE_H, BANCA_D, 0, BASE_H/2, backZ);
+box(MAT.bancada, backW + 0.02, TAMPO, BANCA_D + 0.02, 0, BASE_H + TAMPO/2, backZ + 0.01);
 
-// Puxadores horizontais (cilindros finos inox)
-[-0.7, -0.15, 0.35, 1.0, 1.5].forEach(px => {
-  const p = cyl(MAT.puxador, 0.008, 0.008, 0.22, 8, px, BASE_H - 0.1, backZ + BANCA_D/2 + 0.015);
-  p.rotation.z = Math.PI / 2;
-});
-[[-0.85, 1.56], [-0.35, 1.56], [1.44, 1.56]].forEach(([px, py]) => {
-  const p = cyl(MAT.puxador, 0.007, 0.007, 0.18, 8, px, py, -D/2 + 0.04 + ARM_D + 0.015);
-  p.rotation.z = Math.PI / 2;
-});
-[-0.52, -0.17].forEach(pz => {
-  const p = cyl(MAT.puxador, 0.008, 0.008, 0.22, 8, rightX - BANCA_D/2 - 0.015, BASE_H - 0.1, pz);
-  p.rotation.x = Math.PI / 2;
-});
+// Perna ESQUERDA (coluna forno/micro no fundo + cooktop à frente)
+const cooktopZ0 = -1.34, leftRunZ1 = 0.2;
+const cookBaseCZ = (cooktopZ0 + leftRunZ1) / 2;     // -0.57
+const cookBaseLen = leftRunZ1 - cooktopZ0;          //  1.54
+box(MAT.armario, BANCA_D, BASE_H, cookBaseLen, leftX, BASE_H/2, cookBaseCZ);
+box(MAT.bancada, BANCA_D + 0.02, TAMPO, cookBaseLen + 0.02, leftX, BASE_H + TAMPO/2, cookBaseCZ);
 
-// ---------- Backsplash (subway tile) ----------
-box(MAT.subway, backW, ARM_Y - CT_TOP, 0.02, backCX, CT_TOP + (ARM_Y - CT_TOP)/2, -D/2 + 0.05);
-box(MAT.subway, 0.02, ARM_Y - CT_TOP, RLEN, W/2 - 0.05, CT_TOP + (ARM_Y - CT_TOP)/2, rightZ);
+// Perna DIREITA (geladeira no fundo + bancada à frente)
+const fridgeZ1 = -1.16;
+const rightBaseCZ = (fridgeZ1 + 0.2) / 2;           // -0.48
+const rightBaseLen = 0.2 - fridgeZ1;                //  1.36
+box(MAT.armario, BANCA_D, BASE_H, rightBaseLen, rightX, BASE_H/2, rightBaseCZ);
+box(MAT.bancada, BANCA_D + 0.02, TAMPO, rightBaseLen + 0.02, rightX, BASE_H + TAMPO/2, rightBaseCZ);
 
-// ---------- Janela (acima da pia, com sol entrando) ----------
-const JX = 0.6, JY = 1.5;
-const gardenMat = new THREE.MeshBasicMaterial({ color: 0x4a7c3f });
-const garden = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.0), gardenMat);
-garden.position.set(JX, JY, -D/2 - 0.5);                            // jardim visível pela janela
-scene.add(garden);
-box(MAT.armario, 1.06, 0.96, 0.06, JX, JY, -D/2 + 0.045);            // moldura branca
-box(MAT.vidro, 0.94, 0.84, 0.02, JX, JY, -D/2 + 0.055);              // vidro azulado
-for (let i = -2; i <= 2; i++) {                                              // 5 grades verticais
-  box(MAT.armario, 0.015, 0.84, 0.015, JX + i * 0.19, JY, -D/2 + 0.065);
-}
+// ---------- Armários superiores ----------
+box(MAT.armario, 0.34, ARM_H, ARM_D, -0.94, ARM_Y + ARM_H/2, wallBack + ARM_D/2);                // fundo, esq da janela
+box(MAT.armario, 0.34, ARM_H, ARM_D,  0.94, ARM_Y + ARM_H/2, wallBack + ARM_D/2);                // fundo, dir da janela
+box(MAT.armario, ARM_D, ARM_H, cookBaseLen, wallLeft + ARM_D/2, ARM_Y + ARM_H/2, cookBaseCZ);    // esquerda (sobre cooktop)
+box(MAT.armario, ARM_D, ARM_H, rightBaseLen, wallRight - ARM_D/2, ARM_Y + ARM_H/2, rightBaseCZ); // direita
 
-// ---------- Geladeira inox (parede direita, entre o run direito e a parede do fundo) ----------
-const GX = W/2 - 0.04 - 0.38, GZ = -1.0;
-box(MAT.inox, 0.72, 1.95, 0.75, GX, 1.95/2, GZ);
-const gh = cyl(MAT.puxador, 0.012, 0.012, 0.9, 8, GX - 0.34, 1.15, GZ + 0.28);  // handle vertical (lado voltado pro ambiente)
-gh.rotation.z = 0;
+// ---------- Backsplash (subway tile) — ladeando a janela + nas laterais ----------
+box(MAT.subway, 0.34, ARM_Y - CT_TOP, 0.02, -0.94, CT_TOP + (ARM_Y - CT_TOP)/2, wallBack + 0.01);
+box(MAT.subway, 0.34, ARM_Y - CT_TOP, 0.02,  0.94, CT_TOP + (ARM_Y - CT_TOP)/2, wallBack + 0.01);
+box(MAT.subway, 0.02, ARM_Y - CT_TOP, cookBaseLen, wallLeft + 0.01, CT_TOP + (ARM_Y - CT_TOP)/2, cookBaseCZ);
+box(MAT.subway, 0.02, ARM_Y - CT_TOP, rightBaseLen, wallRight - 0.01, CT_TOP + (ARM_Y - CT_TOP)/2, rightBaseCZ);
 
-// ---------- Coluna forno + micro-ondas (parede esquerda) ----------
-const CX = -1.4, CZ = -0.4;
-box(MAT.armario, 0.62, 2.2, 0.68, CX, 1.1, CZ);
-box(MAT.eletro, 0.64, 0.42, 0.52, CX + 0.01, 1.62, CZ);   // micro em cima
-box(MAT.eletro, 0.64, 0.55, 0.52, CX + 0.01, 1.0, CZ);    // forno embaixo
-[[1.78, CZ], [1.22, CZ]].forEach(([hy, hz]) => {           // handles horizontais
-  const p = cyl(MAT.puxador, 0.01, 0.01, 0.4, 8, CX + 0.34, hy, hz);
-  p.rotation.x = Math.PI / 2;
-});
+// ---------- Puxadores das bases (horizontais) ----------
+[-0.6, 0.6].forEach(px => { const p = cyl(MAT.puxador, 0.008, 0.008, 0.22, 8, px, BASE_H - 0.1, backZ + BANCA_D/2 + 0.015); p.rotation.z = Math.PI/2; });
+[-0.9, -0.2, 0.15].forEach(pz => { const p = cyl(MAT.puxador, 0.008, 0.008, 0.2, 8, leftX + BANCA_D/2 + 0.015, BASE_H - 0.1, pz); p.rotation.x = Math.PI/2; });
+[-0.8, -0.2, 0.15].forEach(pz => { const p = cyl(MAT.puxador, 0.008, 0.008, 0.2, 8, rightX - BANCA_D/2 - 0.015, BASE_H - 0.1, pz); p.rotation.x = Math.PI/2; });
 
-// ---------- Cooktop embutido ----------
-const TX = -0.6;
-const ck = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.46), MAT.cooktop);
-ck.rotation.x = -Math.PI / 2; ck.position.set(TX, 0.906, backZ); ck.castShadow = true; ck.receiveShadow = true;
-scene.add(ck);
-[[-0.17, -0.11], [0.17, -0.11], [-0.17, 0.11], [0.17, 0.11]].forEach(([bx, bz]) => {
-  cyl(new THREE.MeshPhysicalMaterial({ color: 0x2a2a2a, roughness: 0.15, metalness: 0.7 }),
-      0.065, 0.065, 0.006, 24, TX + bx, 0.909, backZ + bz);
-});
+// ---------- Cooktop embutido (perna esquerda) ----------
+const ckX = leftX, ckZ = -0.55;
+const ck = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.70), MAT.cooktop);
+ck.rotation.x = -Math.PI/2; ck.position.set(ckX, 0.906, ckZ); ck.receiveShadow = true; scene.add(ck);
+[[-0.1,-0.17],[0.1,-0.17],[-0.1,0.17],[0.1,0.17]].forEach(([bx,bz]) =>
+  cyl(new THREE.MeshPhysicalMaterial({ color: 0x2a2a2a, roughness: 0.15, metalness: 0.7 }), 0.06, 0.06, 0.006, 24, ckX + bx, 0.909, ckZ + bz));
 
-// ---------- Coifa (embutida no armário superior) ----------
-box(MAT.inox, 0.78, 0.12, 0.38, TX, 1.52, -1.92);
+// ---------- Coifa embutida (sobre o cooktop) ----------
+box(MAT.inox, 0.44, 0.12, 0.52, ckX, 1.48, ckZ);
+box(MAT.armario, 0.30, 0.22, 0.34, wallLeft + 0.17, 1.63, ckZ);   // duto até o armário
 
-// ---------- Pia (cuba inox + torneira cromada) ----------
-const PX = 0.6;
+// ---------- Pia (cuba inox + torneira cromada) sob a janela ----------
+const PX = 0;
 box(new THREE.MeshPhysicalMaterial({ color: 0x9fa3a6, roughness: 0.18, metalness: 0.85 }),
-    0.56, 0.012, 0.42, PX, CT_TOP + TAMPO/2 - 0.014, backZ);                 // borda da cuba
+    0.60, 0.012, 0.44, PX, CT_TOP + TAMPO/2 - 0.014, backZ);                 // borda da cuba
 box(new THREE.MeshPhysicalMaterial({ color: 0x74787b, roughness: 0.25, metalness: 0.8 }),
-    0.48, 0.13, 0.34, PX, CT_TOP - 0.08, backZ);                             // cuba encastrada
-cyl(MAT.cromado, 0.014, 0.014, 0.26, 12, PX, CT_TOP + 0.13, backZ - 0.17);   // corpo torneira
-const bica = cyl(MAT.cromado, 0.011, 0.011, 0.17, 12, PX, CT_TOP + 0.25, backZ - 0.09);
+    0.52, 0.13, 0.34, PX, CT_TOP - 0.08, backZ);                             // cuba encastrada
+cyl(MAT.cromado, 0.014, 0.014, 0.28, 12, PX, CT_TOP + 0.14, backZ - 0.16);   // corpo torneira
+const bica = cyl(MAT.cromado, 0.011, 0.011, 0.18, 12, PX, CT_TOP + 0.27, backZ - 0.08);
 bica.rotation.x = Math.PI / 2;
 
-// ---------- Ilha central + banquetas ----------
-box(MAT.armario, 1.25, BASE_H, 0.75, 0, BASE_H/2, 0.5);
-box(MAT.ilha, 1.32, TAMPO, 0.82, 0, BASE_H + TAMPO/2, 0.5);
-// Efeito cachoeira (waterfall) — laterais do tampo descem até o chão
-box(MAT.ilha, TAMPO, BASE_H + TAMPO, 0.82, -0.625 - TAMPO/2, (BASE_H + TAMPO)/2, 0.5);
-box(MAT.ilha, TAMPO, BASE_H + TAMPO, 0.82,  0.625 + TAMPO/2, (BASE_H + TAMPO)/2, 0.5);
-[-0.35, 0.35].forEach(bx => {
-  cyl(MAT.haste, 0.15, 0.15, 0.02, 24, bx, 0.01, 1.25);        // base circular
-  cyl(MAT.haste, 0.02, 0.02, 0.62, 12, bx, 0.32, 1.25);        // haste fina
-  cyl(MAT.banqueta, 0.17, 0.17, 0.05, 24, bx, 0.655, 1.25);    // assento escuro
+// ---------- Geladeira embutida (parede direita, canto do fundo) ----------
+const frDepthX = 0.72, frWidthZ = 0.80, frH = 2.05;
+const frCX = wallRight - frDepthX/2;                 //  1.35
+const frCZ = wallBack + frWidthZ/2 + 0.02;           // -1.54
+box(MAT.armario, frDepthX + 0.08, frH + 0.14, frWidthZ + 0.10, frCX + 0.04, (frH + 0.14)/2, frCZ);  // nicho de embutir
+box(MAT.inox, frDepthX, frH, frWidthZ, frCX, frH/2, frCZ);                                          // corpo inox
+const frFront = frCX - frDepthX/2;                   // 0.99 (face voltada ao ambiente)
+box(MAT.inox, 0.03, 0.66, frWidthZ - 0.05, frFront - 0.015, 0.42, frCZ);                     // gaveta freezer (baixo)
+box(MAT.inox, 0.03, 1.18, frWidthZ/2 - 0.04, frFront - 0.015, 1.45, frCZ - frWidthZ/4);      // porta French esq
+box(MAT.inox, 0.03, 1.18, frWidthZ/2 - 0.04, frFront - 0.015, 1.45, frCZ + frWidthZ/4);      // porta French dir
+cyl(MAT.puxador, 0.012, 0.012, 0.6, 8, frFront - 0.03, 1.5, frCZ - 0.05);   // puxador vertical esq
+cyl(MAT.puxador, 0.012, 0.012, 0.6, 8, frFront - 0.03, 1.5, frCZ + 0.05);   // puxador vertical dir
+const gfh = cyl(MAT.puxador, 0.012, 0.012, 0.4, 8, frFront - 0.03, 0.64, frCZ); gfh.rotation.x = Math.PI/2;  // puxador freezer
+
+// ---------- Coluna forno + micro-ondas (parede esquerda, canto do fundo) ----------
+const colDepthX = 0.66, colWidthZ = 0.62, colH = 2.2;
+const colCX = wallLeft + colDepthX/2;   // -1.38
+const colCZ = wallBack + colWidthZ/2;   // -1.65
+box(MAT.armario, colDepthX, colH, colWidthZ, colCX, colH/2, colCZ);
+const colFront = colCX + colDepthX/2 - 0.01;
+box(MAT.eletro, 0.05, 0.40, colWidthZ - 0.10, colFront, 1.72, colCZ);            // micro-ondas (cima)
+box(MAT.eletro, 0.05, 0.55, colWidthZ - 0.10, colFront, 1.18, colCZ);            // forno (meio)
+box(MAT.armario, 0.03, 0.22, colWidthZ - 0.06, colFront + 0.005, 2.06, colCZ);   // armário superior
+[0.70, 0.46, 0.22].forEach(dy => box(MAT.armario, 0.03, 0.18, colWidthZ - 0.06, colFront + 0.005, dy, colCZ));  // gavetas abaixo
+[1.90, 1.44].forEach(hy => { const p = cyl(MAT.puxador, 0.01, 0.01, 0.34, 8, colFront + 0.03, hy, colCZ); p.rotation.x = Math.PI/2; });
+
+// ---------- Ilha central com efeito cachoeira ----------
+const isX = 0, isZ = 0.45, isW = 1.3, isD = 0.82, isTopY = BASE_H + TAMPO;
+box(MAT.armario, isW - 0.16, BASE_H, isD - 0.12, isX, BASE_H/2, isZ);                     // corpo recuado sob o tampo
+box(MAT.ilha, isW, TAMPO, isD, isX, isTopY - TAMPO/2, isZ);                               // tampo de mármore
+box(MAT.ilha, TAMPO, isTopY, isD, isX - isW/2 + TAMPO/2, isTopY/2, isZ);                  // cachoeira lateral esq
+box(MAT.ilha, TAMPO, isTopY, isD, isX + isW/2 - TAMPO/2, isTopY/2, isZ);                  // cachoeira lateral dir
+
+// ---------- Banquetas (3) ----------
+[-0.42, 0, 0.42].forEach(bx => {
+  cyl(MAT.haste, 0.15, 0.15, 0.02, 24, bx, 0.01, 1.12);        // base circular
+  cyl(MAT.haste, 0.02, 0.02, 0.62, 12, bx, 0.32, 1.12);        // haste fina
+  cyl(MAT.banqueta, 0.17, 0.17, 0.05, 24, bx, 0.655, 1.12);    // assento escuro
 });
 
 // ---------- Iluminação ----------
@@ -251,16 +276,27 @@ scene.add(sun);
 const fill = new THREE.DirectionalLight(0xe8f0ff, 0.4);
 fill.position.set(2, 2, 4); scene.add(fill);
 
-// 6 spots do teto — luz quente forte
-[[-1,-1.5],[-1,0],[-1,1.2],[0.8,-1.5],[0.8,0],[0.8,1.2]].forEach(([sx,sz]) => {
-  const pl = new THREE.PointLight(0xfff4e0, 1.0, 4.5, 2);
-  pl.position.set(sx, H - 0.08, sz); scene.add(pl);
-  // Fixture escuro no teto
-  const fix = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.05,0.05,0.025,16),
-    new THREE.MeshStandardMaterial({color:0x1a1a1a})
-  );
-  fix.position.set(sx, H-0.012, sz); fix.castShadow = true; fix.receiveShadow = true; scene.add(fix);
+// ---------- Sanca de gesso (rebaixo perimetral) ----------
+const sD = 0.16, sW = 0.45, sy = H - sD/2;
+box(MAT.gesso, W, sD, sW, 0, sy, -D/2 + sW/2, false);   // sanca fundo
+box(MAT.gesso, W, sD, sW, 0, sy,  D/2 - sW/2, false);   // sanca frente
+box(MAT.gesso, sW, sD, D, -W/2 + sW/2, sy, 0, false);   // sanca esquerda
+box(MAT.gesso, sW, sD, D,  W/2 - sW/2, sy, 0, false);   // sanca direita
+
+// Painel de luz central (sobre a ilha)
+const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.65), new THREE.MeshBasicMaterial({ color: 0xfff4e0 }));
+panel.rotation.x = Math.PI/2; panel.position.set(0, H - 0.01, 0.45); scene.add(panel);
+const panelLight = new THREE.PointLight(0xfff4e0, 0.8, 5, 2);
+panelLight.position.set(0, H - 0.15, 0.45); scene.add(panelLight);
+
+// Spots embutidos na sanca (metade emite luz, resto é só fixture — perf)
+const spotY = H - sD - 0.005;
+[[-1.5,-1.55],[-0.55,-1.55],[0.55,-1.55],[1.5,-1.55],
+ [-1.5, 1.55],[1.5, 1.55],
+ [-1.53,-0.4],[-1.53,0.6],[1.53,-0.4],[1.53,0.6]].forEach(([sx,sz], i) => {
+  if (i % 2 === 0) { const pl = new THREE.PointLight(0xfff4e0, 0.55, 4, 2); pl.position.set(sx, spotY, sz); scene.add(pl); }
+  const fix = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.02, 16), new THREE.MeshStandardMaterial({ color: 0x161616 }));
+  fix.position.set(sx, spotY, sz); scene.add(fix);
 });
 
 // ---------- Loop ----------
